@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>FaceDocs — License Activation</title>
+<meta name="description" content="FaceDocs license activation portal — facedocs.bond"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0a0f1e;--bg2:#101a32;--card:#131d3a;--border:#1e2e5a;--accent:#3b82f6;--accent2:#60a5fa;--cyan:#22d3ee;--green:#22c55e;--text:#e2e8f0;--muted:#94a3b8;--warn:#f59e0b}
+body{font-family:Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;background:radial-gradient(900px 600px at 20% 0%, #1e3a8a22, transparent 60%), radial-gradient(700px 500px at 90% 20%, #06b6d422, transparent 60%), var(--bg);color:var(--text);min-height:100vh}
+a{color:var(--accent2);text-decoration:none}
+a:hover{text-decoration:underline}
+.nav{position:sticky;top:0;z-index:50;background:rgba(10,15,30,.8);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:14px 24px;max-width:1200px;margin:0 auto;width:100%}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:.02em}
+.brand-logo{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#3b82f6,#22d3ee);display:grid;place-items:center;font-weight:900;color:white;box-shadow:0 8px 24px #3b82f644}
+.nav-links{display:flex;gap:18px;align-items:center;font-size:14px}
+.btn{appearance:none;border:1px solid var(--border);background:var(--card);color:var(--text);padding:10px 18px;border-radius:999px;font-weight:600;font-size:14px;cursor:pointer;transition:.15s}
+.btn:hover{transform:translateY(-1px);border-color:var(--accent)}
+.btn-primary{background:linear-gradient(135deg,#2563eb,#0ea5e9);border-color:transparent;color:white;box-shadow:0 8px 24px #3b82f644}
+.btn-primary:hover{box-shadow:0 12px 32px #3b82f666}
+.hero{max-width:1200px;margin:0 auto;padding:48px 24px 24px;display:grid;grid-template-columns:1.1fr .9fr;gap:32px;align-items:center}
+@media(max-width:880px){.hero{grid-template-columns:1fr}}
+.hero h1{font-size:42px;line-height:1.05;letter-spacing:-.02em}
+.hero h1 span{background:linear-gradient(135deg,#60a5fa,#22d3ee);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.hero p{color:var(--muted);margin-top:12px;line-height:1.6;max-width:560px}
+.badge{display:inline-flex;gap:8px;align-items:center;background:#1e293b;border:1px solid var(--border);padding:6px 12px;border-radius:999px;font-size:12px;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 0 6px #22c55e22;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 6px #22c55e22}50%{box-shadow:0 0 0 10px #22c55e00}}
+.card{background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));border:1px solid var(--border);border-radius:20px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.card h3{font-size:14px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;margin-bottom:14px}
+.input{width:100%;background:#0b1226;border:1px solid var(--border);color:var(--text);padding:14px 16px;border-radius:12px;font-size:15px;outline:none;transition:.15s}
+.input:focus{border-color:var(--accent);box-shadow:0 0 0 4px #3b82f622}
+.row{display:flex;gap:12px}
+.stack{display:flex;flex-direction:column;gap:12px}
+.kbd{font-family:ui-monospace, SFMono-Regular, Menlo, monospace;font-size:12px;background:#0b1226;border:1px solid var(--border);padding:4px 8px;border-radius:6px;color:var(--muted)}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+@media(max-width:700px){.grid3{grid-template-columns:1fr}}
+.stat{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px}
+.stat strong{font-size:22px;display:block;margin-top:6px}
+.stat span{color:var(--muted);font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+.features{max-width:1200px;margin:32px auto;padding:0 24px;display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+@media(max-width:880px){.features{grid-template-columns:1fr}}
+.feat{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px}
+.feat h4{display:flex;align-items:center;gap:8px}
+.icon{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;background:#1e293b;border:1px solid var(--border);font-size:14px}
+.footer{max-width:1200px;margin:40px auto 0;padding:24px;color:var(--muted);font-size:13px;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;border-top:1px solid var(--border)}
+.status-ok{color:var(--green)}.status-err{color:#ef4444}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#111a33;border:1px solid var(--border);color:var(--text);padding:12px 16px;border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.4);display:none;z-index:99}
+.tabs{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
+.tab{padding:8px 14px;border-radius:999px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-size:13px;font-weight:600}
+.tab.active{background:white;color:#0a0f1e;border-color:white}
+hr.sep{border:none;border-top:1px solid var(--border);margin:16px 0}
+.blur{filter:blur(6px);user-select:none}
+</style>
+</head>
+<body>
+<nav class="nav">
+  <div class="brand"><div class="brand-logo">F</div> FaceDocs <span style="color:var(--muted);font-weight:500">· bond</span></div>
+  <div class="nav-links">
+    <span class="kbd">v4.7.8 • facedocs.bond</span>
+    <span id="healthDot" class="badge"><span class="dot"></span> <span id="healthTxt">checking…</span></span>
+    <a href="/admin.html" class="btn">Admin</a>
+  </div>
+</nav>
+
+<section class="hero">
+  <div>
+    <div class="badge"><span class="dot"></span> Live on 82.25.90.196 • SSL Ready</div>
+    <h1>Activate your <span>FaceGate</span> license in seconds</h1>
+    <p>Enter your license key and device ID. This portal replaces the old <code>standing-panther-214.convex.site</code> & <code>grateful-mule-939.convex.site</code> endpoints. Fast HMAC-verified, Zero-tamper.</p>
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('activate')">Activate Key</button>
+      <button class="tab" onclick="switchTab('verify')">Verify Token</button>
+      <button class="tab" onclick="switchTab('trial')">Trial</button>
+      <button class="tab" onclick="switchTab('status')">Key Status</button>
+    </div>
+    <div style="margin-top:12px;color:var(--muted);font-size:13px">Need a key? Contact <a href="https://t.me/Facegateofficialbot" target="_blank">FaceGate Bot</a> or admin.</div>
+  </div>
+
+  <!-- RIGHT CARD: dynamic form -->
+  <div class="card" id="card">
+    <h3 id="cardTitle">Activate Key</h3>
+    <div id="form-activate" class="stack">
+      <label style="font-size:13px;color:var(--muted)">License Key</label>
+      <input id="act-key" class="input" placeholder="FACE-XXXX-XXXX e.g. NOWORNEVER"/>
+      <div class="row">
+        <div style="flex:1">
+          <label style="font-size:13px;color:var(--muted)">Device ID (from app)</label>
+          <input id="act-device" class="input" placeholder="device id / UUID"/>
+        </div>
+      </div>
+      <div class="row">
+        <input id="act-wifi" class="input" placeholder="WiFi IP (optional)"/>
+        <input id="act-ver" class="input" placeholder="App version (optional)"/>
+      </div>
+      <button class="btn btn-primary" onclick="doActivateLegacy()">Activate (Legacy API)</button>
+      <div style="color:var(--muted);font-size:12px">Also tries new HMAC <code>/api/activate</code> automatically as fallback.</div>
+      <div id="act-out" style="font-size:13px;line-height:1.6"></div>
+    </div>
+
+    <div id="form-verify" class="stack" style="display:none">
+      <label style="font-size:13px;color:var(--muted)">Token</label>
+      <input id="ver-token" class="input" placeholder="paste activation token"/>
+      <label style="font-size:13px;color:var(--muted)">Device ID</label>
+      <input id="ver-device" class="input" placeholder="device id"/>
+      <button class="btn btn-primary" onclick="doVerifyLegacy()">Verify Token</button>
+      <div id="ver-out" style="font-size:13px;line-height:1.6"></div>
+    </div>
+
+    <div id="form-trial" class="stack" style="display:none">
+      <p style="color:var(--muted);font-size:14px">Hardcoded trial key <b style="color:var(--text)">NOWORNEVER</b> — 24h, 1 device. Check availability for this device then activate.</p>
+      <input id="trial-device" class="input" placeholder="Device ID"/>
+      <div class="row">
+        <button class="btn" onclick="doCheckTrial()">Check Trial</button>
+        <button class="btn btn-primary" style="flex:1" onclick="doActivateTrial()">Activate Trial (24h)</button>
+      </div>
+      <div id="trial-out" style="font-size:13px;line-height:1.6"></div>
+    </div>
+
+    <div id="form-status" class="stack" style="display:none">
+      <input id="status-key" class="input" placeholder="Enter license key"/>
+      <button class="btn btn-primary" onclick="doKeyStatus()">Check Status</button>
+      <div id="status-out" style="font-size:13px;line-height:1.6"></div>
+    </div>
+  </div>
+</section>
+
+<section class="grid3" style="max-width:1200px;margin:0 auto;padding:0 24px">
+  <div class="stat"><span>Total Keys</span><strong id="s-keys">—</strong><span style="color:var(--muted)">active / revoked</span></div>
+  <div class="stat"><span>Activations</span><strong id="s-act">—</strong><span>devices bound</span></div>
+  <div class="stat"><span>Domain</span><strong style="font-size:16px">facedocs.bond</strong><span>DNS → 82.25.90.196</span></div>
+</section>
+
+<section class="features">
+  <div class="feat">
+    <h4><span class="icon">⚡</span> HMAC Envelope</h4>
+    <p style="color:var(--muted);font-size:14px;margin-top:8px;line-height:1.6">Responses are SHA-256 + HMAC-SHA256 signed with <code>FACEGATE_HMAC_SECRET</code>. Native <code>verify_envelope</code> checks <code>rid</code> & signature — tamper = reject.</p>
+    <div class="kbd" style="margin-top:10px">ph=sha256(canonical(p))<br/>s=hmac(secret, ph+"."+t+"."+rid+"."+n)</div>
+  </div>
+  <div class="feat">
+    <h4><span class="icon">🔒</span> Endpoints Migrated</h4>
+    <p style="color:var(--muted);font-size:14px;margin-top:8px;line-height:1.6">All 8 endpoints on one domain. No more split between convex.site hosts.</p>
+    <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px">
+      <span class="kbd">POST /api/validate_key</span><span class="kbd">POST /api/verify_token</span><span class="kbd">POST /api/activate</span><span class="kbd">POST /api/verify</span><span class="kbd">POST /api/heartbeat</span>
+    </div>
+  </div>
+  <div class="feat">
+    <h4><span class="icon">🛰</span> VPS Ready</h4>
+    <p style="color:var(--muted);font-size:14px;margin-top:8px;line-height:1.6">Server binds <code>0.0.0.0:3000</code>. Put behind Nginx with Let's Encrypt. See <code>nginx.conf</code> in repo.</p>
+    <div class="kbd" style="margin-top:10px">A facedocs.bond → 82.25.90.196<br/>AAAA → 2a02:4780:2d:4fec::1</div>
+  </div>
+</section>
+
+<footer class="footer">
+  <div>© 2026 FaceDocs — FaceGate License Server • Build V4.7.8 • <a href="/api/health" target="_blank">/api/health</a></div>
+  <div>Need app patch? See <a href="#" onclick="showPatch(event)">PATCH GUIDE</a></div>
+</footer>
+
+<div id="toast" class="toast"></div>
+
+<!-- Patch modal (simple) -->
+<div id="patchModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(6px);z-index:90;align-items:center;justify-content:center;padding:24px">
+  <div class="card" style="max-width:860px;width:100%;max-height:90vh;overflow:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center"><h3>App Patch Guide — Update Native URLs to facedocs.bond</h3><button class="btn" onclick="hidePatch()">✕</button></div>
+    <p style="color:var(--muted);font-size:13px;margin-top:8px">Replace XOR-obfuscated base URLs in both C++ files. New domain is <b>https://facedocs.bond</b> (without trailing slash; code adds /).</p>
+    <hr class="sep"/>
+    <div style="font-size:13px;line-height:1.7">
+      <b>1) activation.cpp</b> — replace <code>BASE_URL_OBF</code>:<br/>
+      <div class="kbd" style="display:block;white-space:pre;overflow:auto;margin:8px 0">static const uint8_t BASE_URL_OBF[] = {
+    0x32,0x2e,0x2e,0x2a,0x29,0x60,0x75,0x75,
+    0x3c,0x3b,0x39,0x3f,0x3e,0x35,0x39,0x29,
+    0x74,0x38,0x35,0x34,0x3e
+};</div>
+      <b>2) license/license_client.cpp</b> — replace <code>LC_BASE_URL_OBF</code> with same bytes.<br/>
+      <div class="kbd" style="display:block;white-space:pre;overflow:auto;margin:8px 0">static const uint8_t LC_BASE_URL_OBF[] = {
+    0x32,0x2e,0x2e,0x2a,0x29,0x60,0x75,0x75,
+    0x3c,0x3b,0x39,0x3f,0x3e,0x35,0x39,0x29,
+    0x74,0x38,0x35,0x34,0x3e
+};</div>
+      Optional: also update <code>DOWNLOAD_URL_OBF</code> to <code>https://facedocs.bond/download</code>:<br/>
+      <div class="kbd" style="display:block;white-space:pre;margin:8px 0">0x32,0x2e,0x2e,0x2a,0x29,0x60,0x75,0x75,
+    0x3c,0x3b,0x39,0x3f,0x3e,0x35,0x39,0x29,
+    0x74,0x38,0x35,0x34,0x3e,0x75,0x3e,0x35,
+    0x2d,0x34,0x36,0x35,0x3b,0x3e</div>
+      <b>3)</b> Clean build: <code>./gradlew clean assembleRelease</code><br/>
+      <b>4)</b> Test: <code>curl -X POST https://facedocs.bond/api/health</code><br/>
+      Full diff & scripts are in <code>PATCH_GUIDE.md</code> in the server repo.
+    </div>
+  </div>
+</div>
+
+<script>
+function toast(m, ok=true){
+  const t=document.getElementById('toast');
+  t.textContent=m; t.style.display='block'; t.style.borderColor= ok ? '#22c55e55':'#ef444455';
+  setTimeout(()=>t.style.display='none',3200);
+}
+function switchTab(id){
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+  event.target.classList.add('active');
+  ['activate','verify','trial','status'].forEach(x=>{
+    document.getElementById('form-'+x).style.display = (x===id?'flex':'none');
+  });
+  document.getElementById('cardTitle').textContent = {activate:'Activate Key',verify:'Verify Token',trial:'Trial Activation',status:'Key Status'}[id];
+}
+window.switchTab = switchTab;
+function showPatch(e){e.preventDefault();document.getElementById('patchModal').style.display='flex'}
+function hidePatch(){document.getElementById('patchModal').style.display='none'}
+window.showPatch=showPatch; window.hidePatch=hidePatch;
+
+async function api(path, method='GET', body){
+  const r = await fetch(path,{method, headers:{'Content-Type':'application/json'}, body: body?JSON.stringify(body):undefined});
+  const j = await r.json().catch(()=>({})); return {ok:r.ok, j, status:r.status};
+}
+
+async function doActivateLegacy(){
+  const key=document.getElementById('act-key').value.trim();
+  const device=document.getElementById('act-device').value.trim();
+  const wifi=document.getElementById('act-wifi').value.trim();
+  const ver=document.getElementById('act-ver').value.trim();
+  const out=document.getElementById('act-out');
+  if(!key||!device){toast('Key and Device required',false);return}
+  out.innerHTML='⏳ activating…';
+  try{
+    // try legacy first
+    let {j} = await api('/api/validate_key','POST',{key, device_id:device, wifi_ip:wifi||null, app_version:ver||null});
+    if(j.success){
+      out.innerHTML=`<span class="status-ok">✓ ${j.message}</span><br/><b>Token:</b> <span class="kbd" style="word-break:break-all">${j.token}</span><br/>Expires: ${j.expires_at||'—'} • Trial:${j.is_trial} Paid:${j.is_paid} • Remaining:${j.remaining_devices}/${j.max_devices}`;
+      toast('Activated (legacy) ✓');
+    } else {
+      // try new HMAC path automatically with same data
+      const rid = 'web-'+Math.random().toString(36).slice(2,10);
+      const r2 = await api('/api/activate','POST',{key, device_id:device, android_id:device, wifi_ip:wifi, wifi_bssid:"", build_fp:ver, rid});
+      if(r2.j.p && r2.j.p.ok){
+        out.innerHTML=`<span class="status-ok">✓ HMAC activated — ${r2.j.p.access}</span><br/><b>Token:</b> <span class="kbd" style="word-break:break-all">${r2.j.p.token}</span><br/>Expires: ${r2.j.p.expires_at||'—'} • Remaining:${r2.j.p.remaining_seconds}s<br/><small style="color:var(--muted)">Envelope verified (rid ${r2.j.rid})</small>`;
+        toast('Activated (HMAC) ✓');
+      } else if (r2.j.p){
+        out.innerHTML=`<span class="status-err">✗ ${r2.j.p.reason || r2.j.p.access}</span><br/><small>${JSON.stringify(r2.j.p)}</small>`;
+        toast('Failed',false);
+      } else {
+        out.innerHTML=`<span class="status-err">✗ ${j.message||'Failed'}</span><br/><small>${JSON.stringify(j)}</small>`;
+        toast('Failed',false);
+      }
+    }
+    refreshStats();
+  }catch(e){ out.innerHTML=`<span class="status-err">Network error: ${e.message}</span>`; }
+}
+async function doVerifyLegacy(){
+  const token=document.getElementById('ver-token').value.trim();
+  const device=document.getElementById('ver-device').value.trim();
+  const out=document.getElementById('ver-out');
+  if(!token||!device){toast('Token & device required',false);return}
+  out.innerHTML='⏳ verifying…';
+  const {j}=await api('/api/verify_token','POST',{token, device_id:device});
+  if(j.valid) out.innerHTML=`<span class="status-ok">✓ ${j.message}</span><br/>Trial:${j.is_trial} Paid:${j.is_paid}<br/>Expires: ${j.expires_at||'—'}`;
+  else out.innerHTML=`<span class="status-err">✗ ${j.message||'Invalid'}</span><br/><small>${JSON.stringify(j)}</small>`;
+}
+async function doCheckTrial(){
+  const d=document.getElementById('trial-device').value.trim();
+  const out=document.getElementById('trial-out');
+  if(!d){toast('Device ID required',false);return}
+  out.innerHTML='⏳ checking…';
+  const {j}=await api('/api/check_trial','POST',{device_id:d});
+  out.innerHTML = j.available ? `<span class="status-ok">✓ Trial available</span> — ${j.message}` : `<span class="status-err">✗ Not available</span> — ${j.message} ${j.expires_at? '• Expires '+j.expires_at : ''}`;
+}
+async function doActivateTrial(){
+  const d=document.getElementById('trial-device').value.trim();
+  const out=document.getElementById('trial-out');
+  if(!d){toast('Device ID required',false);return}
+  out.innerHTML='⏳ activating trial…';
+  const {j}=await api('/api/activate_trial','POST',{device_id:d});
+  if(j.success) out.innerHTML=`<span class="status-ok">✓ ${j.message}</span><br/><b>Token:</b> <span class="kbd">${j.token}</span><br/>Expires: ${j.expires_at}`;
+  else out.innerHTML=`<span class="status-err">✗ ${j.message}</span>`;
+  refreshStats();
+}
+async function doKeyStatus(){
+  const k=document.getElementById('status-key').value.trim();
+  const out=document.getElementById('status-out');
+  if(!k){toast('Key required',false);return}
+  out.innerHTML='⏳ fetching…';
+  const r=await fetch('/api/key_status/'+encodeURIComponent(k));
+  const j=await r.json().catch(()=>({error:'not found'}));
+  if(r.ok) out.innerHTML=`<b>${j.key}</b> — <span class="${j.status==='active'?'status-ok':'status-err'}">${j.status}</span><br/>Devices: ${j.used_count}/${j.max_devices} (remaining ${j.remaining})<br/>Trial:${j.is_trial} Paid:${j.is_paid}<br/>Expires: ${j.expires_at||'lifetime'}<br/>Bound: ${(j.devices||[]).join(', ')||'—'}`;
+  else out.innerHTML=`<span class="status-err">✗ ${j.error||'not found'}</span>`;
+}
+async function refreshStats(){
+  try{
+    const r=await fetch('/api/health'); const j=await r.json();
+    document.getElementById('s-keys').textContent = j.stats.totalKeys;
+    document.getElementById('s-act').textContent = j.stats.totalActivations;
+  }catch{}
+}
+async function healthCheck(){
+  try{
+    const r=await fetch('/api/health'); const j=await r.json();
+    document.getElementById('healthTxt').textContent = j.ok ? 'API Online' : 'API Error';
+    document.getElementById('healthDot').firstElementChild.style.background = j.ok ? '#22c55e' : '#ef4444';
+  }catch{
+    document.getElementById('healthTxt').textContent='Offline';
+    document.getElementById('healthDot').firstElementChild.style.background='#ef4444';
+  }
+  refreshStats();
+}
+healthCheck();
+setInterval(healthCheck, 15000);
+
+// expose for inline handlers
+window.doActivateLegacy=doActivateLegacy;
+window.doVerifyLegacy=doVerifyLegacy;
+window.doCheckTrial=doCheckTrial;
+window.doActivateTrial=doActivateTrial;
+window.doKeyStatus=doKeyStatus;
+</script>
+</body>
+</html>

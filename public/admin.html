@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Admin — FaceDocs</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0a0f1e;--card:#131d3a;--border:#1e2e5a;--accent:#3b82f6;--text:#e2e8f0;--muted:#94a3b8}
+body{font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+a{color:#60a5fa;text-decoration:none}
+.nav{display:flex;justify-content:space-between;align-items:center;padding:14px 20px;border-bottom:1px solid var(--border);background:rgba(10,15,30,.8);backdrop-filter:blur(10px);position:sticky;top:0}
+.btn{border:1px solid var(--border);background:var(--card);color:var(--text);padding:8px 14px;border-radius:8px;cursor:pointer;font-weight:600}
+.btn-primary{background:#2563eb;border-color:transparent;color:white}
+.input{width:100%;background:#0b1226;border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:8px;outline:none}
+.card{background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));border:1px solid var(--border);border-radius:14px;padding:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:10px 8px;border-bottom:1px solid var(--border);text-align:left}
+th{color:var(--muted);font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+.badge{font-size:11px;padding:4px 8px;border-radius:999px;border:1px solid var(--border);background:#0b1226}
+.badge-green{color:#22c55e;border-color:#22c55e33;background:#22c55e14}
+.badge-red{color:#ef4444;border-color:#ef444433;background:#ef444414}
+.badge-amber{color:#f59e0b;border-color:#f59e0b33;background:#f59e0b14}
+.row{display:flex;gap:8px;align-items:center}
+.login{max-width:420px;margin:80px auto;padding:24px}
+.hidden{display:none}
+.kbd{font-family:ui-monospace,monospace;font-size:12px;background:#0b1226;border:1px solid var(--border);padding:3px 6px;border-radius:6px;word-break:break-all}
+</style>
+</head>
+<body>
+<nav class="nav">
+  <div style="display:flex;gap:10px;align-items:center"><a href="/" style="font-weight:800">← FaceDocs</a><span class="badge">Admin</span><span id="conn" class="badge">—</span></div>
+  <div class="row"><span id="who" style="color:var(--muted);font-size:13px"></span><button class="btn" onclick="logout()">Logout</button></div>
+</nav>
+
+<div id="loginView" class="login card">
+  <h2>Admin Login</h2>
+  <p style="color:var(--muted);font-size:13px;margin:8px 0 14px">Use VPS credentials — default <code>root / 87877878@Kk##</code> maps to admin auth. Override with env <code>ADMIN_USER / ADMIN_PASS</code>.</p>
+  <div style="display:flex;flex-direction:column;gap:10px">
+    <input id="u" class="input" placeholder="Username (admin)" value="admin"/>
+    <input id="p" class="input" type="password" placeholder="Password"/>
+    <button class="btn btn-primary" onclick="doLogin()">Login</button>
+    <div id="loginMsg" style="font-size:13px;color:#f87171"></div>
+    <div style="font-size:12px;color:var(--muted)">Health: <a href="/api/health" target="_blank">/api/health</a> • VPS 82.25.90.196</div>
+  </div>
+</div>
+
+<div id="dash" class="hidden" style="max-width:1100px;margin:20px auto;padding:0 16px">
+  <div class="grid" style="margin-bottom:16px">
+    <div class="card"><div style="color:var(--muted);font-size:12px;letter-spacing:.06em">TOTAL KEYS</div><div id="m-keys" style="font-size:28px;font-weight:800">—</div><div style="color:var(--muted);font-size:12px" id="m-keys2"></div></div>
+    <div class="card"><div style="color:var(--muted);font-size:12px">ACTIVATIONS</div><div id="m-act" style="font-size:28px;font-weight:800">—</div><div style="color:var(--muted);font-size:12px">devices bound</div></div>
+    <div class="card"><div style="color:var(--muted);font-size:12px">DOMAIN</div><div style="font-size:18px;font-weight:800">facedocs.bond</div><div style="color:var(--muted);font-size:12px">→ 82.25.90.196 • <span id="m-time"></span></div></div>
+  </div>
+
+  <div class="card">
+    <h3>Create Key</h3>
+    <div style="display:grid;grid-template-columns:1.2fr .6fr .6fr .6fr auto;gap:8px;margin-top:10px">
+      <input id="ck-key" class="input" placeholder="Key (leave empty to auto-generate with prefix)"/>
+      <input id="ck-prefix" class="input" placeholder="Prefix FACE" value="FACE"/>
+      <input id="ck-max" class="input" type="number" value="1" min="1" placeholder="max devices"/>
+      <select id="ck-type" class="input"><option value="paid">Paid</option><option value="trial">Trial (24h)</option><option value="lifetime">Lifetime</option></select>
+      <input id="ck-days" class="input" type="number" value="30" placeholder="days"/>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <input id="ck-note" class="input" placeholder="Note (optional)"/>
+      <button class="btn" onclick="autoGen()">+ Generate</button>
+      <button class="btn btn-primary" onclick="createKey()">Create</button>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <button class="btn" onclick="bulkGen()">Bulk generate 10</button>
+      <span style="color:var(--muted);font-size:12px">Bulk uses prefix + random 5+4 hex</span>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px;overflow:auto">
+    <div class="row" style="justify-content:space-between"><h3>Keys</h3><button class="btn" onclick="loadKeys()">↻ Refresh</button></div>
+    <table id="keysTbl"><thead><tr><th>Key</th><th>Type</th><th>Devices</th><th>Status</th><th>Expires</th><th>Note</th><th></th></tr></thead><tbody></tbody></table>
+  </div>
+
+  <div class="card" style="margin-top:16px;overflow:auto">
+    <div class="row" style="justify-content:space-between"><h3>Activations (devices)</h3><button class="btn" onclick="loadActs()">↻ Refresh</button></div>
+    <table id="actsTbl"><thead><tr><th>Key</th><th>Device ID</th><th>Android ID</th><th>WiFi IP</th><th>Token (prefix)</th><th>Expires</th><th>Last Seen</th><th></th></tr></thead><tbody></tbody></table>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <h3>API Quick Test</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px">
+      <div>
+        <div style="font-size:13px;color:var(--muted)">POST /api/validate_key</div>
+        <textarea id="t-validate" class="input" rows="4" style="font-family:monospace;font-size:12px">{"key":"NOWORNEVER","device_id":"test-device-001"}</textarea>
+        <button class="btn btn-primary" style="margin-top:6px" onclick="testValidate()">Test validate_key</button>
+        <pre id="o-validate" class="kbd" style="margin-top:6px;white-space:pre-wrap;min-height:60px"></pre>
+      </div>
+      <div>
+        <div style="font-size:13px;color:var(--muted)">POST /api/activate (HMAC)</div>
+        <textarea id="t-activate" class="input" rows="4" style="font-family:monospace;font-size:12px">{"key":"NOWORNEVER","device_id":"test-device-002","android_id":"abc123","wifi_bssid":"aa:bb:cc:dd:ee:ff","wifi_ip":"192.168.1.5","build_fp":"google/sdk","rid":"test-rid-123"}</textarea>
+        <button class="btn btn-primary" style="margin-top:6px" onclick="testActivate()">Test activate</button>
+        <pre id="o-activate" class="kbd" style="margin-top:6px;white-space:pre-wrap;min-height:60px"></pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let TOKEN = localStorage.getItem('fd_token') || '';
+let CREDS = localStorage.getItem('fd_creds') || '';
+
+function authHeader(){
+  if(TOKEN) return 'Bearer ' + TOKEN;
+  if(CREDS) return 'Basic ' + CREDS;
+  return '';
+}
+async function api(path, method='GET', body, noAuth=false){
+  const h={'Content-Type':'application/json'};
+  if(!noAuth && authHeader()) h['Authorization']=authHeader();
+  const r=await fetch(path,{method, headers:h, body: body?JSON.stringify(body):undefined});
+  const j=await r.json().catch(()=>({}));
+  return {r,j};
+}
+
+function showLogin(msg){
+  document.getElementById('loginView').classList.remove('hidden');
+  document.getElementById('dash').classList.add('hidden');
+  if(msg) document.getElementById('loginMsg').textContent=msg;
+}
+function showDash(){
+  document.getElementById('loginView').classList.add('hidden');
+  document.getElementById('dash').classList.remove('hidden');
+}
+async function doLogin(){
+  const u=document.getElementById('u').value.trim();
+  const p=document.getElementById('p').value.trim();
+  if(!u||!p){document.getElementById('loginMsg').textContent='Enter user & pass';return}
+  const {r,j}=await api('/admin/login','POST',{user:u, pass:p}, true);
+  if(j.ok){
+    TOKEN=j.token;
+    CREDS=btoa(u+':'+p);
+    localStorage.setItem('fd_token',TOKEN);
+    localStorage.setItem('fd_creds',CREDS);
+    document.getElementById('who').textContent=u;
+    showDash(); loadAll();
+  } else {
+    document.getElementById('loginMsg').textContent=j.message||'Login failed';
+  }
+}
+function logout(){
+  localStorage.removeItem('fd_token'); localStorage.removeItem('fd_creds'); TOKEN=''; CREDS=''; showLogin();
+}
+
+async function checkAuth(){
+  if(!TOKEN && !CREDS){ showLogin(); return false; }
+  const {r}=await api('/admin/keys','GET');
+  if(r.status===401){ showLogin('Session expired — login again'); return false;}
+  const u = atob(CREDS).split(':')[0]||'admin';
+  document.getElementById('who').textContent=u;
+  showDash(); return true;
+}
+
+async function loadStats(){
+  const {j}=await api('/admin/stats','GET');
+  document.getElementById('m-keys').textContent=j.totalKeys ?? '—';
+  document.getElementById('m-keys2').textContent= (j.activeKeys||0)+' active • '+(j.trialKeys||0)+' trial';
+  document.getElementById('m-act').textContent=j.totalActivations ?? '—';
+  document.getElementById('m-time').textContent=new Date(j.time).toLocaleString();
+  document.getElementById('conn').textContent='API Online';
+  document.getElementById('conn').className='badge badge-green';
+}
+async function loadKeys(){
+  const {r,j}=await api('/admin/keys','GET');
+  if(r.status===401){showLogin();return}
+  const tb=document.querySelector('#keysTbl tbody'); tb.innerHTML='';
+  j.forEach(k=>{
+    const tr=document.createElement('tr');
+    const status = k.status_computed || k.status;
+    const badgeCls = status==='active'?'badge-green':status==='expired'?'badge-amber':'badge-red';
+    tr.innerHTML=`
+      <td><span class="kbd">${k.key}</span></td>
+      <td>${k.is_trial?'<span class="badge badge-amber">TRIAL</span>':'<span class="badge badge-green">PAID</span>'} <span style="color:var(--muted)">x${k.max_devices}</span></td>
+      <td>${k.used_count}/${k.max_devices} <span style="color:var(--muted)">rem ${k.remaining}</span></td>
+      <td><span class="badge ${badgeCls}">${status}</span></td>
+      <td style="font-size:12px">${k.expires_at? new Date(k.expires_at).toLocaleDateString(): '<span style="color:var(--muted)">lifetime/trial</span>'}</td>
+      <td style="color:var(--muted);font-size:12px">${k.note||''}</td>
+      <td><button class="btn" onclick="statusKey('${k.key}')">status</button> <button class="btn" style="color:#f87171" onclick="delKey(${k.id})">del</button></td>`;
+    tb.appendChild(tr);
+  });
+}
+async function loadActs(){
+  const {j}=await api('/admin/activations','GET');
+  const tb=document.querySelector('#actsTbl tbody'); tb.innerHTML='';
+  (j||[]).forEach(a=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td><span class="kbd">${a.keyText}</span></td>
+      <td class="kbd">${a.deviceId.slice(0,16)}…</td>
+      <td style="font-size:11px;color:var(--muted)">${a.androidId||'—'}</td>
+      <td>${a.wifiIp||'—'}</td>
+      <td class="kbd">${(a.token||'').slice(0,14)}…</td>
+      <td style="font-size:12px">${a.expiresAt? new Date(a.expiresAt).toLocaleString(): '—'}</td>
+      <td style="font-size:12px">${a.lastSeen? new Date(a.lastSeen).toLocaleString(): '—'}</td>
+      <td><button class="btn" style="color:#f87171" onclick="revoke('${a.deviceId}','${a.keyText}')">revoke</button></td>`;
+    tb.appendChild(tr);
+  });
+}
+async function createKey(){
+  const key=document.getElementById('ck-key').value.trim();
+  const prefix=document.getElementById('ck-prefix').value.trim()||'FACE';
+  const max=document.getElementById('ck-max').value;
+  const type=document.getElementById('ck-type').value;
+  const days=document.getElementById('ck-days').value;
+  const note=document.getElementById('ck-note').value.trim();
+  let finalKey=key;
+  if(!finalKey){
+    // generate one
+    const rand = [...crypto.getRandomValues(new Uint8Array(3))].map(b=>b.toString(16).padStart(2,'0')).join('').toUpperCase();
+    const rand2 = [...crypto.getRandomValues(new Uint8Array(2))].map(b=>b.toString(16).padStart(2,'0')).join('').toUpperCase();
+    finalKey = `${prefix}-${rand}-${rand2}`;
+  }
+  const is_trial = type==='trial';
+  const is_paid = type!=='trial';
+  const d = type==='lifetime'? 0 : parseInt(days)||30;
+  const {r,j}=await api('/admin/keys','POST',{key:finalKey, max_devices:parseInt(max)||1, is_trial, is_paid, days:d, note});
+  if(r.ok){ loadKeys(); loadStats(); alert('Created: '+finalKey); document.getElementById('ck-key').value='';}
+  else alert('Error: '+(j.error||'failed'));
+}
+async function autoGen(){
+  const prefix=document.getElementById('ck-prefix').value.trim()||'FACE';
+  document.getElementById('ck-key').value = prefix+'-'+Math.random().toString(16).slice(2,8).toUpperCase()+'-'+Math.random().toString(16).slice(2,6).toUpperCase();
+}
+async function bulkGen(){
+  const prefix=document.getElementById('ck-prefix').value.trim()||'FACE';
+  const max=document.getElementById('ck-max').value;
+  const type=document.getElementById('ck-type').value;
+  const days=document.getElementById('ck-days').value;
+  const is_trial=type==='trial';
+  const {r,j}=await api('/admin/generate','POST',{prefix, count:10, max_devices:parseInt(max)||1, is_trial, days:parseInt(days)||30});
+  if(r.ok){ alert('Generated '+(j.length||0)+' keys'); loadKeys(); loadStats();}
+  else alert('Error');
+}
+async function delKey(id){
+  if(!confirm('Delete key '+id+' ? This also removes its activations.')) return;
+  const {r}=await api('/admin/keys/'+id,'DELETE');
+  if(r.ok) loadKeys();
+}
+async function revoke(device,key){
+  if(!confirm(`Revoke device ${device.slice(0,12)}… from ${key}?`)) return;
+  const {r,j}=await api('/admin/activations','DELETE',{device_id:device, key});
+  if(j.ok) loadActs();
+  else alert(j.error||'failed');
+}
+async function statusKey(key){
+  const r=await fetch('/api/key_status/'+encodeURIComponent(key));
+  const j=await r.json();
+  alert(JSON.stringify(j,null,2));
+}
+async function testValidate(){
+  const body=JSON.parse(document.getElementById('t-validate').value||'{}');
+  const {j}=await api('/api/validate_key','POST',body, true);
+  document.getElementById('o-validate').textContent=JSON.stringify(j,null,2);
+}
+async function testActivate(){
+  const body=JSON.parse(document.getElementById('t-activate').value||'{}');
+  // ensure rid
+  if(!body.rid) body.rid='test-'+Math.random().toString(36).slice(2,8);
+  const {j}=await api('/api/activate','POST',body, true);
+  document.getElementById('o-activate').textContent=JSON.stringify(j,null,2);
+}
+async function loadAll(){ loadStats(); loadKeys(); loadActs(); }
+
+// polyfill crypto.getRandomValues for inline gen handled by window.crypto
+window.doLogin=doLogin; window.logout=logout; window.createKey=createKey; window.autoGen=autoGen; window.bulkGen=bulkGen; window.loadKeys=loadKeys; window.loadActs=loadActs; window.delKey=delKey; window.revoke=revoke; window.statusKey=statusKey; window.testValidate=testValidate; window.testActivate=testActivate;
+
+checkAuth().then(ok=>{ if(ok) loadAll(); });
+</script>
+</body>
+</html>
