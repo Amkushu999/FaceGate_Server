@@ -273,7 +273,7 @@ a:hover{text-decoration:underline}
     </div>
 
     <div class="footer">
-      © 2026 FaceDocs • <a href="/api/health" target="_blank">API health</a> • <a href="/admin.html">Admin</a><br/>
+      © 2026 FaceDocs • <a href="/api/health" target="_blank">API health</a><br/>
       <span class="kbd">HMAC secured • facedocs.bond</span>
     </div>
   </div>
@@ -330,7 +330,7 @@ async function doLogin(e){
       ok.textContent='Access granted — redirecting…';
       ok.style.display='block';
       toast('Welcome, '+u+' ✓');
-      setTimeout(()=>{ window.location.href='/admin.html'; },700);
+      ok.textContent='Access granted — welcome, '+u;
     } else {
       err.textContent=j.message||'Invalid credentials'; err.style.display='block';
       toast('Login failed', false);

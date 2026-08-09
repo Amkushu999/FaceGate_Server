@@ -30,7 +30,9 @@ app.use((req, _, next) => {
   next();
 });
 
-// serve frontend
+// serve frontend (admin.html removed — block public admin endpoint)
+app.get('/admin.html', (req, res) => res.status(404).send('Not Found'));
+app.get('/admin', (req, res) => res.status(404).send('Not Found'));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // helpers
@@ -501,10 +503,9 @@ app.post('/admin/generate', requireAdmin, (req, res) => {
   res.json(out);
 });
 
-// fallback to index.html for SPA
+// fallback to index.html for SPA — admin.html is explicitly blocked above
 app.get('*', (req, res) => {
-  // if API 404, already handled above; this is for frontend routes
-  if (req.path.startsWith('/api/') || req.path.startsWith('/admin/')) {
+  if (req.path.startsWith('/api/') || req.path.startsWith('/admin/') || req.path === '/admin.html' || req.path === '/admin') {
     return res.status(404).json({ error: "Not found" });
   }
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
