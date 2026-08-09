@@ -492,6 +492,20 @@ app.put('/admin/keys/:id', requireAdmin, (req, res) => {
   }
 });
 
+app.delete('/admin/keys', requireAdmin, (req, res) => {
+  try {
+    const dbData = db.load();
+    const count = dbData.keys.length;
+    const actCount = dbData.activations.length;
+    dbData.keys = [];
+    dbData.activations = [];
+    db.save();
+    res.json({ ok: true, deleted_keys: count, deleted_activations: actCount });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.delete('/admin/keys/:id', requireAdmin, (req, res) => {
   try {
     db.deleteKey(parseInt(req.params.id));

@@ -235,7 +235,7 @@ textarea.input{resize:vertical;min-height:96px}
     </div>
 
     <div class="card table-card" style="margin-top:16px">
-      <div class="table-head"><h3 style="font-size:14px;font-weight:700">Keys</h3><button class="btn btn-sm" onclick="loadKeys()">↻ Refresh</button></div>
+      <div class="table-head"><h3 style="font-size:14px;font-weight:700">Keys</h3><div style="display:flex;gap:8px"><button class="btn btn-sm" style="color:#f87171;border-color:rgba(239,68,68,.3);background:rgba(239,68,68,.07)" onclick="revokeAllKeys()">⚠ Revoke All</button><button class="btn btn-sm" onclick="loadKeys()">↻ Refresh</button></div></div>
       <div class="table-wrap">
         <table id="keysTbl"><thead><tr><th>Key</th><th>Type</th><th>Devices</th><th>Status</th><th>Expires</th><th>Note</th><th></th></tr></thead><tbody></tbody></table>
       </div>
@@ -414,6 +414,21 @@ async function delKey(id){
   const {r}=await api('/admin/keys/'+id,'DELETE');
   if(r.ok) loadKeys();
 }
+async function revokeAllKeys(){
+  const {j:stats} = await api('/admin/stats','GET');
+  const count = stats.totalKeys ?? 0;
+  const acts = stats.totalActivations ?? 0;
+  if(count===0){ alert('No keys to revoke.'); return; }
+  if(!confirm(`⚠ Revoke ALL ${count} keys and ${acts} activations?\n\nThis will DELETE every key and every device activation permanently.\n\nClick OK to confirm...`)) return;
+  if(!confirm(`FINAL CONFIRM: Delete all ${count} keys? This cannot be undone.`)) return;
+  const {r,j}=await api('/admin/keys','DELETE');
+  if(r.ok){
+    alert(`Revoked ${j.deleted_keys} keys and ${j.deleted_activations} activations.`);
+    loadKeys(); loadStats(); loadActs();
+  } else {
+    alert('Failed: '+(j.error||'unknown'));
+  }
+}
 async function revoke(device,key){
   if(!confirm(`Revoke device ${device.slice(0,12)}… from ${key}?`)) return;
   const {r,j}=await api('/admin/activations','DELETE',{device_id:device, key});
@@ -438,7 +453,7 @@ async function testActivate(){
 }
 async function loadAll(){ loadStats(); loadKeys(); loadActs(); }
 
-window.doLogin=doLogin; window.logout=logout; window.createKey=createKey; window.autoGen=autoGen; window.bulkGen=bulkGen; window.loadKeys=loadKeys; window.loadActs=loadActs; window.delKey=delKey; window.revoke=revoke; window.statusKey=statusKey; window.testValidate=testValidate; window.testActivate=testActivate;
+window.doLogin=doLogin; window.logout=logout; window.createKey=createKey; window.autoGen=autoGen; window.bulkGen=bulkGen; window.loadKeys=loadKeys; window.loadActs=loadActs; window.delKey=delKey; window.revokeAllKeys=revokeAllKeys; window.revoke=revoke; window.statusKey=statusKey; window.testValidate=testValidate; window.testActivate=testActivate;
 
 checkAuth().then(ok=>{ if(ok) loadAll(); });
 </script>
