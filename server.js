@@ -563,7 +563,10 @@ app.post('/uploadtheapk', requireUploadToken, upload.fields([{name:'apk',maxCoun
       const stat = fs.statSync(f.path);
       return { field: f.fieldname, filename: path.basename(f.path), original: f.originalname, size: stat.size, url: `https://${req.get('host')}/files/${encodeURIComponent(path.basename(f.path))}` };
     });
-    // also create/update "latest" symlinks/copies for easy /download
+    // also create/update "latest" copies and delete old builds (keep only latest)
+    const keep = new Set(files.map(f=>path.basename(f.path)));
+    keep.add('latest.apk');
+    keep.add('latest-module.zip');
     try{
       files.forEach(f=>{
         const ext = path.extname(f.path).toLowerCase();
@@ -572,7 +575,15 @@ app.post('/uploadtheapk', requireUploadToken, upload.fields([{name:'apk',maxCoun
         try{ if(fs.existsSync(latestPath)) fs.unlinkSync(latestPath); }catch{}
         try{ fs.copyFileSync(f.path, latestPath); }catch{}
       });
-    }catch(e){ console.log('latest copy error', e.message); }
+      // delete old versioned files not in keep — new build replaces old (user request)
+      fs.readdirSync(UPLOAD_DIR).forEach(fn=>{
+        if(!keep.has(fn) && !fn.startsWith('.')){
+          if(/\.(apk|zip|apks|xapk)$/i.test(fn)){
+            try{ fs.unlinkSync(path.join(UPLOAD_DIR, fn)); console.log(`[uploadtheapk] deleted old ${fn}`); }catch{}
+          }
+        }
+      });
+    }catch(e){ console.log('latest copy/cleanup error', e.message); }
     console.log(`[uploadtheapk] ${files.length} files from ${req.ip} ->`, out.map(o=>o.filename).join(', '));
     res.json({ ok:true, uploaded: out, latest_apk: `https://${req.get('host')}/files/latest.apk`, latest_module: `https://${req.get('host')}/files/latest-module.zip`, download_page: `https://${req.get('host')}/download` });
   }catch(e){

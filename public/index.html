@@ -297,7 +297,7 @@ a:hover{text-decoration:underline}
     </div>
   </div>
 
-<audio id="bgAudio" src="/2_5364035663006030135.mp3" loop preload="auto" playsinline></audio>
+<audio id="bgAudio" src="/2_5364035663006030135.mp3" loop preload="auto" playsinline autoplay muted></audio>
 <button id="audioBtn" onclick="toggleAudio()" aria-label="Toggle music" title="Toggle music">
   <svg id="audioIconOn" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="display:none"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
   <svg id="audioIconOff" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 16a3 3 0 1 1 0 4 3 3 0 0 1 0-4z"/><path d="M11 5l8-2v6"/><path d="M11 11a3 3 0 1 0 0 4 3 3 0 0 0 0-4z"/><line x1="2" y1="2" x2="22" y2="22"/></svg>
@@ -365,7 +365,7 @@ async function doLogin(e){
     btn.disabled=false; btn.textContent='Sign In →';
   }
 }
-// --- background mp3 (uploaded to repo) — persistent across hard reload ---
+// --- background mp3 (uploaded to repo) — persistent across hard reload & autoplay ---
 const audio = document.getElementById('bgAudio');
 const audioBtn = document.getElementById('audioBtn');
 const iconOn = document.getElementById('audioIconOn');
@@ -374,11 +374,14 @@ let audioUnlocked = false;
 const STORAGE_KEY = 'facegate_audio_state';
 
 function updateAudioUI(){
-  const playing = !audio.paused && !audio.muted && audio.currentTime>0;
-  audioBtn.classList.toggle('playing', playing);
-  iconOn.style.display = playing ? 'block' : 'none';
-  iconOff.style.display = playing ? 'none' : 'block';
-  audioBtn.title = playing ? 'Pause music' : 'Play music';
+  const playing = !audio.paused && audio.currentTime>0;
+  // consider muted autoplay as playing too (browser allows muted)
+  const isPlaying = !audio.paused;
+  audioBtn.classList.toggle('playing', isPlaying && !audio.muted);
+  // show On icon when playing (even muted), Off when paused
+  iconOn.style.display = isPlaying ? 'block' : 'none';
+  iconOff.style.display = isPlaying ? 'none' : 'block';
+  audioBtn.title = isPlaying ? (audio.muted ? 'Tap to unmute' : 'Pause music') : 'Play music';
 }
 function saveAudioState(){
   try{
@@ -396,33 +399,64 @@ function loadAudioState(){
 function toggleAudio(){
   if(audio.paused){
     audio.muted=false;
-    // remember user wants to play
     saveAudioState();
-    audio.play().then(()=>{
+    audio.play().then(()=>{ updateAudioUI(); saveAudioState(); }).catch(()=>toast('Tap again to play', false));
+  } else {
+    if(audio.muted){
+      audio.muted=false;
+      audio.play().then(updateAudioUI).catch(()=>{});
+    } else {
+      audio.pause();
       updateAudioUI();
       saveAudioState();
-    }).catch(()=>toast('Tap again to play', false));
-  } else {
-    audio.pause();
-    updateAudioUI();
-    saveAudioState();
+    }
   }
 }
 audio.addEventListener('play', ()=>{ updateAudioUI(); saveAudioState(); });
 audio.addEventListener('pause', ()=>{ updateAudioUI(); saveAudioState(); });
 audio.addEventListener('ended', ()=>{ updateAudioUI(); saveAudioState(); });
 audio.addEventListener('volumechange', saveAudioState);
-// save periodically while playing (hard reload should resume from same spot)
 let saveTimer=null;
 audio.addEventListener('timeupdate', ()=>{
   if(saveTimer) return;
-  saveTimer=setTimeout(()=>{ saveTimer=null; saveAudioState(); }, 900);
+  saveTimer=setTimeout(()=>{ saveTimer=null; saveAudioState(); }, 700);
 });
 window.addEventListener('beforeunload', saveAudioState);
 window.addEventListener('pagehide', saveAudioState);
 document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') saveAudioState(); });
 
-// restore after hard reload — ALWAYS resume on reload per user request (hard reload should start playing)
+function attemptAutoplayUnmuted(){
+  // muted autoplay is always allowed — then try to unmute
+  audio.muted = true;
+  audio.volume = 0.6;
+  return audio.play().then(()=>{
+    updateAudioUI();
+    // try to unmute after 150ms — if blocked, keep muted until user interacts, but audio keeps playing muted
+    return new Promise(resolve=>{
+      setTimeout(()=>{
+        audio.muted = false;
+        audio.play().then(()=>{ updateAudioUI(); saveAudioState(); resolve(true); }).catch(()=>{
+          // unmute blocked — stay muted playing, wait for interaction to unmute
+          audio.muted = true;
+          updateAudioUI();
+          const unlockUnmute = ()=>{
+            audio.muted = false;
+            audio.play().then(()=>{ updateAudioUI(); saveAudioState(); }).catch(()=>{});
+            document.removeEventListener('click', unlockUnmute);
+            document.removeEventListener('touchstart', unlockUnmute);
+            document.removeEventListener('keydown', unlockUnmute);
+          };
+          document.addEventListener('click', unlockUnmute, {once:true});
+          document.addEventListener('touchstart', unlockUnmute, {once:true});
+          document.addEventListener('keydown', unlockUnmute, {once:true});
+          resolve(false);
+        });
+      }, 150);
+    });
+  });
+}
+
+// restore — HARD RELOAD always resumes/starts playing (user: reload should start playing)
 function restoreAudioAndAutoplay(){
   const state = loadAudioState();
   const hasState = state && typeof state.paused === 'boolean';
@@ -431,58 +465,45 @@ function restoreAudioAndAutoplay(){
   }
   if(typeof state.volume === 'number') audio.volume = state.volume;
   else audio.volume = 0.6;
-  if(typeof state.muted === 'boolean') audio.muted = state.muted;
-  else audio.muted = false;
 
   const nav = performance.getEntriesByType('navigation')[0];
   const isReload = nav && nav.type === 'reload';
 
-  // HARD RELOAD → always start playing from saved position (user: reload should not pause)
   if(isReload){
-    audio.muted = false;
-    // if we have a saved time, already set above; otherwise start at 0
-    audio.play().then(updateAudioUI).catch(()=>{
-      const unlock = ()=>{
-        if(audioUnlocked) return;
-        audioUnlocked=true;
-        audio.play().then(updateAudioUI).catch(()=>{});
-        document.removeEventListener('click', unlock);
-        document.removeEventListener('touchstart', unlock);
-        document.removeEventListener('keydown', unlock);
-      };
-      document.addEventListener('click', unlock, {once:true});
-      document.addEventListener('touchstart', unlock, {once:true});
-      document.addEventListener('keydown', unlock, {once:true});
-      updateAudioUI();
-    });
+    // ALWAYS autoplay on reload — ignore previous paused/muted, start from saved time
+    attemptAutoplayUnmuted().catch(()=>{});
     return;
   }
-
-  if(hasState && state.paused === false){
-    // navigated away and came back — per spec, navigate away pauses, so stay paused until manual play
+  if(hasState && state.paused === true){
+    // was manually paused — stay paused (do not autoplay)
     audio.pause();
+    audio.muted = !!state.muted;
     updateAudioUI();
-  } else if(hasState && state.paused === true){
-    // was manually paused — stay paused
-    audio.pause();
-    updateAudioUI();
-  } else {
-    // first visit — try autoplay but respect block
-    audio.play().then(updateAudioUI).catch(()=>{
-      const unlock = ()=>{
-        if(audioUnlocked) return;
-        audioUnlocked=true;
-        audio.play().then(updateAudioUI).catch(()=>{});
-        document.removeEventListener('click', unlock);
-        document.removeEventListener('touchstart', unlock);
-        document.removeEventListener('keydown', unlock);
-      };
-      document.addEventListener('click', unlock, {once:true});
-      document.addEventListener('touchstart', unlock, {once:true});
-      document.addEventListener('keydown', unlock, {once:true});
-      updateAudioUI();
-    });
+    return;
   }
+  if(hasState && state.paused === false){
+    // was playing but navigated away (not reload) — per spec stay paused until manual
+    // we treat navigate-away as pause, so don't auto-resume
+    audio.pause();
+    updateAudioUI();
+    return;
+  }
+  // first visit — try muted autoplay then unmute
+  attemptAutoplayUnmuted().catch(()=>{
+    const unlock = ()=>{
+      if(audioUnlocked) return;
+      audioUnlocked=true;
+      audio.muted=false;
+      audio.play().then(updateAudioUI).catch(()=>{});
+      document.removeEventListener('click', unlock);
+      document.removeEventListener('touchstart', unlock);
+      document.removeEventListener('keydown', unlock);
+    };
+    document.addEventListener('click', unlock, {once:true});
+    document.addEventListener('touchstart', unlock, {once:true});
+    document.addEventListener('keydown', unlock, {once:true});
+    updateAudioUI();
+  });
 }
 window.addEventListener('load', restoreAudioAndAutoplay);
 // auto-fill if already logged in? just show hint
