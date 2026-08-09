@@ -187,7 +187,8 @@ textarea.input{resize:vertical;min-height:96px}
   </div>
 </nav>
 
-<div id="loginView" class="login card">
+<div id="loading" class="login card" style="text-align:center;color:#9ca3af">Loading…</div>
+<div id="loginView" class="login card hidden">
   <h2 style="font-size:20px;font-weight:800">Admin Login</h2>
   <p style="color:var(--muted);font-size:13px;margin:8px 0 16px;line-height:1.5">Use VPS credentials — default <code>admin / 87877878@Kk##</code>. You can override with env <code>ADMIN_USER / ADMIN_PASS</code> on the server.</p>
   <div style="display:flex;flex-direction:column;gap:11px">
@@ -288,9 +289,13 @@ async function api(path, method='GET', body, noAuth=false){
 function showLogin(msg){
   // redirect to main login page (hacker splash) instead of showing admin inline login
   if(msg) sessionStorage.setItem('admin_msg', msg);
+  // hide loading if present
+  const ld=document.getElementById('loading'); if(ld) ld.classList.add('hidden');
   window.location.href='/';
 }
+function hideLoading(){ const ld=document.getElementById('loading'); if(ld) ld.classList.add('hidden'); }
 function showDash(){
+  hideLoading();
   document.getElementById('loginView').classList.add('hidden');
   document.getElementById('dash').classList.remove('hidden');
 }
