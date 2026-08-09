@@ -286,9 +286,9 @@ async function api(path, method='GET', body, noAuth=false){
 }
 
 function showLogin(msg){
-  document.getElementById('loginView').classList.remove('hidden');
-  document.getElementById('dash').classList.add('hidden');
-  if(msg) document.getElementById('loginMsg').textContent=msg;
+  // redirect to main login page (hacker splash) instead of showing admin inline login
+  if(msg) sessionStorage.setItem('admin_msg', msg);
+  window.location.href='/';
 }
 function showDash(){
   document.getElementById('loginView').classList.add('hidden');
@@ -311,7 +311,8 @@ async function doLogin(){
   }
 }
 function logout(){
-  localStorage.removeItem('fd_token'); localStorage.removeItem('fd_creds'); TOKEN=''; CREDS=''; showLogin();
+  localStorage.removeItem('fd_token'); localStorage.removeItem('fd_creds'); TOKEN=''; CREDS='';
+  window.location.href='/';
 }
 
 async function checkAuth(){
