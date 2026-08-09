@@ -12,6 +12,8 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const crypto = require('crypto');
+const fs = require('fs');
+const multer = require('multer');
 const db = require('./db');
 const { buildEnvelope } = require('./envelope');
 
@@ -19,6 +21,30 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const ADMIN_USER = process.env.ADMIN_USER || 'admin';
 const ADMIN_PASS = process.env.ADMIN_PASS || '87877878@Kk##';
+const UPLOAD_TOKEN = process.env.UPLOAD_TOKEN || process.env.UPLOAD_SECRET || 'facegate_upload_2024_87877878_4f9a1c';
+const UPLOAD_DIR = path.join(__dirname, 'uploads');
+try { if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true }); } catch {}
+// multer storage for APKs
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, UPLOAD_DIR),
+  filename: (req, file, cb) => {
+    const orig = file.originalname || 'upload.apk';
+    const ext = path.extname(orig) || '.apk';
+    const base = path.basename(orig, ext).replace(/[^a-zA-Z0-9._-]/g, '_') || 'FaceGate';
+    // keep latest as versioned + also latest alias
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0,19);
+    cb(null, `${base}_${stamp}${ext}`);
+  }
+});
+const upload = multer({
+  storage,
+  limits: { fileSize: 300 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ok = /\.(apk|zip|apks|xapk)$/i.test(file.originalname || '');
+    if (!ok) return cb(new Error('Only APK/ZIP allowed'));
+    cb(null, true);
+  }
+});
 
 app.use(cors());
 app.use(express.json({ limit: '256kb' }));
@@ -501,10 +527,109 @@ app.post('/admin/generate', requireAdmin, (req, res) => {
   res.json(out);
 });
 
+// ─────────────────────────────────────────────
+// UPLOAD / DOWNLOAD — APK distribution for GitHub Actions -> users
+// ─────────────────────────────────────────────
+function requireUploadToken(req, res, next){
+  const token = req.headers['x-upload-token'] || req.headers['x-upload-secret'] || req.query.token || (req.headers.authorization||'').replace(/^Bearer\s+/i,'');
+  if(token && token === UPLOAD_TOKEN) return next();
+  // also allow ADMIN auth as fallback
+  const auth = req.headers.authorization;
+  if(auth){
+    try{
+      let dec=""; if(auth.startsWith('Basic ')) dec=Buffer.from(auth.slice(6),'base64').toString();
+      else if(auth.startsWith('Bearer ')) dec=Buffer.from(auth.slice(7),'base64').toString();
+      else dec=Buffer.from(auth,'base64').toString();
+      const [u,p]=dec.split(':');
+      if(u===ADMIN_USER && p===ADMIN_PASS) return next();
+    }catch{}
+  }
+  return res.status(401).json({ error:'Unauthorized — invalid upload token', hint:'Send header x-upload-token' });
+}
+
+// hidden upload — GitHub Actions will POST here
+// accepts fields: apk, module, file (any)
+// curl -X POST https://facedocs.bond/uploadtheapk -H "x-upload-token: $UPLOAD_TOKEN" -F "apk=@app-debug.apk" -F "module=@FaceGate-Module.zip"
+app.post('/uploadtheapk', requireUploadToken, upload.fields([{name:'apk',maxCount:1},{name:'module',maxCount:1},{name:'file',maxCount:5},{name:'zip',maxCount:5}]), (req,res)=>{
+  try{
+    const files = [];
+    ['apk','module','file','zip'].forEach(k=>{
+      if(req.files && req.files[k]) req.files[k].forEach(f=>files.push(f));
+    });
+    // also handle single file via upload.single
+    if(req.file) files.push(req.file);
+    if(files.length===0) return res.status(400).json({error:'No file uploaded — send field apk or module'});
+    const out = files.map(f=>{
+      const stat = fs.statSync(f.path);
+      return { field: f.fieldname, filename: path.basename(f.path), original: f.originalname, size: stat.size, url: `https://${req.get('host')}/files/${encodeURIComponent(path.basename(f.path))}` };
+    });
+    // also create/update "latest" symlinks/copies for easy /download
+    try{
+      files.forEach(f=>{
+        const ext = path.extname(f.path).toLowerCase();
+        const latestName = ext==='.zip' ? 'latest-module.zip' : 'latest.apk';
+        const latestPath = path.join(UPLOAD_DIR, latestName);
+        try{ if(fs.existsSync(latestPath)) fs.unlinkSync(latestPath); }catch{}
+        try{ fs.copyFileSync(f.path, latestPath); }catch{}
+      });
+    }catch(e){ console.log('latest copy error', e.message); }
+    console.log(`[uploadtheapk] ${files.length} files from ${req.ip} ->`, out.map(o=>o.filename).join(', '));
+    res.json({ ok:true, uploaded: out, latest_apk: `https://${req.get('host')}/files/latest.apk`, latest_module: `https://${req.get('host')}/files/latest-module.zip`, download_page: `https://${req.get('host')}/download` });
+  }catch(e){
+    console.error('uploadtheapk error', e);
+    res.status(500).json({error:e.message});
+  }
+});
+
+// also allow single file upload via any field name
+app.post('/upload', requireUploadToken, upload.any(), (req,res)=>{
+  const files = req.files || [];
+  if(files.length===0) return res.status(400).json({error:'No file'});
+  const out = files.map(f=>({ filename:path.basename(f.path), original:f.originalname, size:fs.statSync(f.path).size, url:`https://${req.get('host')}/files/${encodeURIComponent(path.basename(f.path))}`}));
+  res.json({ok:true, uploaded:out});
+});
+
+// list available downloads (public)
+app.get('/api/downloads', (req,res)=>{
+  try{
+    if(!fs.existsSync(UPLOAD_DIR)) return res.json([]);
+    const files = fs.readdirSync(UPLOAD_DIR).filter(f=>!f.startsWith('.')).map(f=>{
+      const full = path.join(UPLOAD_DIR,f);
+      const stat = fs.statSync(full);
+      return { filename:f, size:stat.size, mtime:stat.mtime.toISOString(), url:`https://${req.get('host')}/files/${encodeURIComponent(f)}`, is_latest: f==='latest.apk' || f==='latest-module.zip' };
+    }).sort((a,b)=> new Date(b.mtime)-new Date(a.mtime));
+    res.json(files);
+  }catch(e){ res.status(500).json({error:e.message}); }
+});
+
+// serve files for download
+app.get('/files/:filename', (req,res)=>{
+  const fn = path.basename(req.params.filename);
+  const full = path.join(UPLOAD_DIR, fn);
+  if(!fs.existsSync(full)) return res.status(404).send('Not found');
+  res.download(full, fn);
+});
+// alias /download/:filename
+app.get('/download/:filename', (req,res)=>{
+  const fn = path.basename(req.params.filename);
+  const full = path.join(UPLOAD_DIR, fn);
+  if(!fs.existsSync(full)) return res.status(404).send('Not found');
+  res.download(full, fn);
+});
+
+// public download page
+app.get('/download', (req,res)=>{
+  const dlPath = path.join(__dirname,'public','download.html');
+  if(fs.existsSync(dlPath)) return res.sendFile(dlPath);
+  // fallback inline if file missing
+  const html = `<!doctype html><meta charset=utf-8><title>Download FaceGate</title><h1>FaceGate Download</h1><p>Download page missing — please contact admin.</p>`;
+  res.send(html);
+});
+
 // fallback to index.html for SPA
 app.get('*', (req, res) => {
   // if API 404, already handled above; this is for frontend routes
-  if (req.path.startsWith('/api/') || req.path.startsWith('/admin/')) {
+  if (req.path.startsWith('/api/') || req.path.startsWith('/admin/') || req.path.startsWith('/files/') || req.path.startsWith('/upload')) {
     return res.status(404).json({ error: "Not found" });
   }
   res.sendFile(path.join(__dirname, 'public', 'index.html'));

@@ -422,7 +422,7 @@ window.addEventListener('beforeunload', saveAudioState);
 window.addEventListener('pagehide', saveAudioState);
 document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') saveAudioState(); });
 
-// restore after hard reload — only auto-resume if it was playing before reload
+// restore after hard reload — ALWAYS resume on reload per user request (hard reload should start playing)
 function restoreAudioAndAutoplay(){
   const state = loadAudioState();
   const hasState = state && typeof state.paused === 'boolean';
@@ -436,12 +436,11 @@ function restoreAudioAndAutoplay(){
 
   const nav = performance.getEntriesByType('navigation')[0];
   const isReload = nav && nav.type === 'reload';
-  const wasPlaying = state.paused === false;
 
-  // If was playing before unload and this is a reload → resume from same time (hard reload should not pause)
-  if(isReload && wasPlaying){
-    // try to resume immediately (hard reload should not pause)
+  // HARD RELOAD → always start playing from saved position (user: reload should not pause)
+  if(isReload){
     audio.muted = false;
+    // if we have a saved time, already set above; otherwise start at 0
     audio.play().then(updateAudioUI).catch(()=>{
       const unlock = ()=>{
         if(audioUnlocked) return;
@@ -456,11 +455,14 @@ function restoreAudioAndAutoplay(){
       document.addEventListener('keydown', unlock, {once:true});
       updateAudioUI();
     });
-  } else if(hasState && wasPlaying){
+    return;
+  }
+
+  if(hasState && state.paused === false){
     // navigated away and came back — per spec, navigate away pauses, so stay paused until manual play
     audio.pause();
     updateAudioUI();
-  } else if(hasState && !wasPlaying){
+  } else if(hasState && state.paused === true){
     // was manually paused — stay paused
     audio.pause();
     updateAudioUI();
