@@ -365,12 +365,14 @@ async function doLogin(e){
     btn.disabled=false; btn.textContent='Sign In →';
   }
 }
-// --- background mp3 (uploaded to repo) ---
+// --- background mp3 (uploaded to repo) — persistent across hard reload ---
 const audio = document.getElementById('bgAudio');
 const audioBtn = document.getElementById('audioBtn');
 const iconOn = document.getElementById('audioIconOn');
 const iconOff = document.getElementById('audioIconOff');
 let audioUnlocked = false;
+const STORAGE_KEY = 'facegate_audio_state';
+
 function updateAudioUI(){
   const playing = !audio.paused && !audio.muted && audio.currentTime>0;
   audioBtn.classList.toggle('playing', playing);
@@ -378,41 +380,109 @@ function updateAudioUI(){
   iconOff.style.display = playing ? 'none' : 'block';
   audioBtn.title = playing ? 'Pause music' : 'Play music';
 }
+function saveAudioState(){
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      time: audio.currentTime || 0,
+      paused: audio.paused,
+      muted: audio.muted,
+      volume: audio.volume
+    }));
+  }catch{}
+}
+function loadAudioState(){
+  try{ return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }catch{ return {}; }
+}
 function toggleAudio(){
   if(audio.paused){
     audio.muted=false;
-    audio.play().then(updateAudioUI).catch(()=>toast('Tap again to play', false));
+    // remember user wants to play
+    saveAudioState();
+    audio.play().then(()=>{
+      updateAudioUI();
+      saveAudioState();
+    }).catch(()=>toast('Tap again to play', false));
   } else {
     audio.pause();
     updateAudioUI();
+    saveAudioState();
   }
 }
-audio.addEventListener('play', updateAudioUI);
-audio.addEventListener('pause', updateAudioUI);
-audio.addEventListener('ended', updateAudioUI);
-// try autoplay on load (browsers may block until interaction)
-window.addEventListener('load', ()=>{
-  audio.volume = 0.6;
-  // attempt autoplay muted then unmute on first interaction
-  audio.play().then(()=>{
-    // if autoplay succeeded, keep playing
-    updateAudioUI();
-  }).catch(()=>{
-    // blocked — wait for first user interaction
-    const unlock = ()=>{
-      if(audioUnlocked) return;
-      audioUnlocked=true;
-      audio.play().then(updateAudioUI).catch(()=>{});
-      document.removeEventListener('click', unlock);
-      document.removeEventListener('touchstart', unlock);
-      document.removeEventListener('keydown', unlock);
-    };
-    document.addEventListener('click', unlock, {once:true});
-    document.addEventListener('touchstart', unlock, {once:true});
-    document.addEventListener('keydown', unlock, {once:true});
-    updateAudioUI();
-  });
+audio.addEventListener('play', ()=>{ updateAudioUI(); saveAudioState(); });
+audio.addEventListener('pause', ()=>{ updateAudioUI(); saveAudioState(); });
+audio.addEventListener('ended', ()=>{ updateAudioUI(); saveAudioState(); });
+audio.addEventListener('volumechange', saveAudioState);
+// save periodically while playing (hard reload should resume from same spot)
+let saveTimer=null;
+audio.addEventListener('timeupdate', ()=>{
+  if(saveTimer) return;
+  saveTimer=setTimeout(()=>{ saveTimer=null; saveAudioState(); }, 900);
 });
+window.addEventListener('beforeunload', saveAudioState);
+window.addEventListener('pagehide', saveAudioState);
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') saveAudioState(); });
+
+// restore after hard reload — only auto-resume if it was playing before reload
+function restoreAudioAndAutoplay(){
+  const state = loadAudioState();
+  const hasState = state && typeof state.paused === 'boolean';
+  if(typeof state.time === 'number' && !isNaN(state.time) && isFinite(state.time)){
+    try{ audio.currentTime = Math.max(0, state.time); }catch{}
+  }
+  if(typeof state.volume === 'number') audio.volume = state.volume;
+  else audio.volume = 0.6;
+  if(typeof state.muted === 'boolean') audio.muted = state.muted;
+  else audio.muted = false;
+
+  const nav = performance.getEntriesByType('navigation')[0];
+  const isReload = nav && nav.type === 'reload';
+  const wasPlaying = state.paused === false;
+
+  // If was playing before unload and this is a reload → resume from same time (hard reload should not pause)
+  if(isReload && wasPlaying){
+    // try to resume immediately (hard reload should not pause)
+    audio.muted = false;
+    audio.play().then(updateAudioUI).catch(()=>{
+      const unlock = ()=>{
+        if(audioUnlocked) return;
+        audioUnlocked=true;
+        audio.play().then(updateAudioUI).catch(()=>{});
+        document.removeEventListener('click', unlock);
+        document.removeEventListener('touchstart', unlock);
+        document.removeEventListener('keydown', unlock);
+      };
+      document.addEventListener('click', unlock, {once:true});
+      document.addEventListener('touchstart', unlock, {once:true});
+      document.addEventListener('keydown', unlock, {once:true});
+      updateAudioUI();
+    });
+  } else if(hasState && wasPlaying){
+    // navigated away and came back — per spec, navigate away pauses, so stay paused until manual play
+    audio.pause();
+    updateAudioUI();
+  } else if(hasState && !wasPlaying){
+    // was manually paused — stay paused
+    audio.pause();
+    updateAudioUI();
+  } else {
+    // first visit — try autoplay but respect block
+    audio.play().then(updateAudioUI).catch(()=>{
+      const unlock = ()=>{
+        if(audioUnlocked) return;
+        audioUnlocked=true;
+        audio.play().then(updateAudioUI).catch(()=>{});
+        document.removeEventListener('click', unlock);
+        document.removeEventListener('touchstart', unlock);
+        document.removeEventListener('keydown', unlock);
+      };
+      document.addEventListener('click', unlock, {once:true});
+      document.addEventListener('touchstart', unlock, {once:true});
+      document.addEventListener('keydown', unlock, {once:true});
+      updateAudioUI();
+    });
+  }
+}
+window.addEventListener('load', restoreAudioAndAutoplay);
 // auto-fill if already logged in? just show hint
 window.addEventListener('load',()=>{
   const creds=localStorage.getItem('fd_creds');
