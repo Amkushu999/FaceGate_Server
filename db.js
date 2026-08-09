@@ -24,7 +24,7 @@ function ensureDb() {
         status: "active",
         is_trial: true,
         is_paid: false,
-        expires_at: null, // trial expiry is per-activation (24h)
+        expires_at: null, // trial expiry is per-activation (1h)
         created_at: new Date().toISOString(),
         note: "Demo trial key"
       },

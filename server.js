@@ -122,7 +122,7 @@ app.post('/api/validate_key', (req, res) => {
   // generate token (HMAC)
   const token = db.generateToken(device, rec.key, rec.id);
   const expiresAt = rec.is_trial
-    ? new Date(Date.now() + 24*3600*1000).toISOString() // trial: 24h per device
+    ? new Date(Date.now() + 1*3600*1000).toISOString() // trial: 1h per device
     : rec.expires_at;
 
   db.upsertActivation({
@@ -139,7 +139,7 @@ app.post('/api/validate_key', (req, res) => {
 
   return res.json({
     success: true,
-    message: rec.is_trial ? "Trial activated (24h)" : "Key activated",
+    message: rec.is_trial ? "Trial activated (1h)" : "Key activated",
     token,
     is_trial: !!rec.is_trial,
     is_paid: !!rec.is_paid,
@@ -210,12 +210,12 @@ app.post('/api/activate_trial', (req, res) => {
   if (existing) return res.json({ success: false, message: "Trial already used for this device", token: null });
 
   const token = db.generateToken(device, rec.key, rec.id);
-  const expiresAt = new Date(Date.now() + 24*3600*1000).toISOString();
+  const expiresAt = new Date(Date.now() + 1*3600*1000).toISOString();
   db.upsertActivation({
     keyId: rec.id, keyText: rec.key, deviceId: device, androidId: "", wifiIp: wifi_ip || wifiIp || "", bssid: "", buildFp: "", token, expiresAt
   });
   return res.json({
-    success: true, message: "Trial activated (24h)", token, is_trial: true, is_paid: false, expires_at: expiresAt, remaining_devices: 0, max_devices: 1
+    success: true, message: "Trial activated (1h)", token, is_trial: true, is_paid: false, expires_at: expiresAt, remaining_devices: 0, max_devices: 1
   });
 });
 
@@ -288,7 +288,7 @@ app.post('/api/activate', (req, res) => {
 
   const token = db.generateToken(deviceId, rec.key, rec.id);
   const expiresAt = rec.is_trial
-    ? new Date(Date.now() + 24*3600*1000).toISOString()
+    ? new Date(Date.now() + 1*3600*1000).toISOString()
     : rec.expires_at;
   const expiresMs = expiresAt ? new Date(expiresAt).getTime() : 0;
   const remaining = expiresAt ? Math.max(0, Math.floor((new Date(expiresAt).getTime() - Date.now())/1000)) : 999999;

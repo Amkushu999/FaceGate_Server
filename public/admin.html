@@ -210,14 +210,14 @@ textarea.input{resize:vertical;min-height:96px}
 
     <div class="card">
       <h3 style="font-size:15px;font-weight:700">Create Key</h3>
-      <p style="color:var(--muted);font-size:12px;margin-top:4px">Leave key empty to auto-generate. Trial = 24h per device.</p>
+      <p style="color:var(--muted);font-size:12px;margin-top:4px">Leave key empty to auto-generate. Trial = 1h per device.</p>
       <div class="create-grid" id="createGrid">
         <input id="ck-key" class="input" placeholder="Key (leave empty to auto-generate with prefix)"/>
         <input id="ck-prefix" class="input" placeholder="Prefix FACE" value="FACE"/>
         <input id="ck-max" class="input" type="number" value="1" min="1" placeholder="max devices"/>
         <select id="ck-type" class="input">
           <option value="paid">Paid</option>
-          <option value="trial">Trial (24h)</option>
+          <option value="trial">Trial (1h)</option>
           <option value="lifetime">Lifetime</option>
         </select>
         <input id="ck-days" class="input" type="number" value="30" placeholder="days"/>
