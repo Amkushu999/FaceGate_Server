@@ -6,99 +6,265 @@
 <title>Admin — FaceDocs</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-:root{--bg:#0a0f1e;--card:#131d3a;--border:#1e2e5a;--accent:#3b82f6;--text:#e2e8f0;--muted:#94a3b8}
-body{font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-a{color:#60a5fa;text-decoration:none}
-.nav{display:flex;justify-content:space-between;align-items:center;padding:14px 20px;border-bottom:1px solid var(--border);background:rgba(10,15,30,.8);backdrop-filter:blur(10px);position:sticky;top:0}
-.btn{border:1px solid var(--border);background:var(--card);color:var(--text);padding:8px 14px;border-radius:8px;cursor:pointer;font-weight:600}
-.btn-primary{background:#2563eb;border-color:transparent;color:white}
-.input{width:100%;background:#0b1226;border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:8px;outline:none}
-.card{background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));border:1px solid var(--border);border-radius:14px;padding:16px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
-table{width:100%;border-collapse:collapse;font-size:13px}
-th,td{padding:10px 8px;border-bottom:1px solid var(--border);text-align:left}
-th{color:var(--muted);font-size:11px;letter-spacing:.06em;text-transform:uppercase}
-.badge{font-size:11px;padding:4px 8px;border-radius:999px;border:1px solid var(--border);background:#0b1226}
-.badge-green{color:#22c55e;border-color:#22c55e33;background:#22c55e14}
-.badge-red{color:#ef4444;border-color:#ef444433;background:#ef444414}
-.badge-amber{color:#f59e0b;border-color:#f59e0b33;background:#f59e0b14}
-.row{display:flex;gap:8px;align-items:center}
-.login{max-width:420px;margin:80px auto;padding:24px}
+:root{--bg:#080c14;--card:#111827;--card2:#151d2f;--border:#1f2937;--border2:#243049;--accent:#3b82f6;--accent2:#60a5fa;--text:#e5e7eb;--muted:#9ca3af;--green:#22c55e}
+body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;line-height:1.5}
+a{color:var(--accent2);text-decoration:none}
+a:hover{text-decoration:underline}
+.nav{
+  position:sticky;top:0;z-index:50;
+  display:flex;justify-content:space-between;align-items:center;
+  padding:14px 20px;
+  background:rgba(8,12,20,.9);
+  backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--border);
+}
+.btn{
+  border:1px solid var(--border);
+  background:var(--card);
+  color:var(--text);
+  padding:9px 14px;
+  border-radius:9px;
+  cursor:pointer;
+  font-weight:600;
+  font-size:13px;
+  transition:.15s;
+  white-space:nowrap;
+}
+.btn:hover{border-color:var(--border2);transform:translateY(-1px)}
+.btn-primary{background:linear-gradient(135deg,#2563eb,#1d4ed8);border-color:transparent;color:white;box-shadow:0 6px 16px rgba(37,99,235,.25)}
+.btn-primary:hover{box-shadow:0 8px 20px rgba(37,99,235,.35)}
+.btn-sm{padding:6px 10px;font-size:12px}
+.input{
+  width:100%;
+  background:#0b1220;
+  border:1px solid var(--border);
+  color:var(--text);
+  padding:10px 12px;
+  border-radius:9px;
+  outline:none;
+  font-size:13px;
+  transition:.15s;
+}
+.input:focus{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.12);background:#0e1a32}
+.input::placeholder{color:#64748b}
+.card{
+  background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.015));
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:18px;
+  box-shadow:0 10px 30px rgba(0,0,0,.25);
+}
+.badge{font-size:11px;padding:4px 9px;border-radius:999px;border:1px solid var(--border);background:#0b1220;color:var(--muted);white-space:nowrap}
+.badge-green{color:#22c55e;border-color:rgba(34,197,94,.25);background:rgba(34,197,94,.08)}
+.badge-red{color:#ef4444;border-color:rgba(239,68,68,.25);background:rgba(239,68,68,.08)}
+.badge-amber{color:#f59e0b;border-color:rgba(245,158,11,.25);background:rgba(245,158,11,.08)}
+.kbd{font-family:ui-monospace,monospace;font-size:12px;background:#0b1220;border:1px solid var(--border);padding:3px 6px;border-radius:6px;word-break:break-all}
 .hidden{display:none}
-.kbd{font-family:ui-monospace,monospace;font-size:12px;background:#0b1226;border:1px solid var(--border);padding:3px 6px;border-radius:6px;word-break:break-all}
+
+/* layout */
+.container{
+  max-width:1280px;
+  width:100%;
+  margin:0 auto;
+  padding:0 20px;
+}
+@media(max-width:640px){ .container{padding:0 14px} }
+
+.login{max-width:440px;margin:70px auto;padding:26px}
+.stats-grid{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:14px;
+}
+@media(max-width:900px){ .stats-grid{grid-template-columns:1fr} }
+
+.create-grid{
+  display:grid;
+  grid-template-columns: 1.8fr 1fr 120px 150px 110px;
+  gap:10px;
+  margin-top:12px;
+  align-items:center;
+}
+@media(max-width:1100px){
+  .create-grid{grid-template-columns:1fr 1fr 1fr;}
+  .create-grid #ck-key{grid-column:1 / -1}
+}
+@media(max-width:640px){
+  .create-grid{grid-template-columns:1fr;}
+  .create-grid #ck-key{grid-column:auto}
+}
+.create-actions{
+  display:flex;
+  gap:8px;
+  margin-top:12px;
+  flex-wrap:wrap;
+  align-items:center;
+}
+.note-row{
+  display:flex;
+  gap:8px;
+  align-items:center;
+  flex:1;
+  min-width:200px;
+}
+@media(max-width:640px){
+  .note-row{width:100%}
+}
+
+/* tables */
+.table-wrap{
+  overflow-x:auto;
+  -webkit-overflow-scrolling:touch;
+  margin-top:12px;
+  border:1px solid var(--border);
+  border-radius:10px;
+  background:rgba(11,18,32,.5);
+}
+table{
+  width:100%;
+  border-collapse:collapse;
+  font-size:13px;
+  min-width:780px;
+}
+th,td{
+  padding:11px 12px;
+  border-bottom:1px solid var(--border);
+  text-align:left;
+  white-space:nowrap;
+}
+th{
+  color:var(--muted);
+  font-size:11px;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  background:rgba(255,255,255,.02);
+  position:sticky;
+  top:0;
+}
+td{color:#d1d5db}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(255,255,255,.02)}
+
+/* special for narrow devices: allow table to scroll, keep card padding */
+.table-card{padding:0;overflow:hidden}
+.table-card .table-head{
+  padding:16px 18px 0 18px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+.table-card .table-wrap{
+  margin:12px 0 0 0;
+  border-left:none;
+  border-right:none;
+  border-bottom:none;
+  border-radius:0;
+}
+.api-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:14px;
+  margin-top:12px;
+}
+@media(max-width:800px){ .api-grid{grid-template-columns:1fr} }
+textarea.input{resize:vertical;min-height:96px}
+.row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap}
 </style>
 </head>
 <body>
 <nav class="nav">
-  <div style="display:flex;gap:10px;align-items:center"><a href="/" style="font-weight:800">← FaceDocs</a><span class="badge">Admin</span><span id="conn" class="badge">—</span></div>
-  <div class="row"><span id="who" style="color:var(--muted);font-size:13px"></span><button class="btn" onclick="logout()">Logout</button></div>
+  <div style="display:flex;gap:10px;align-items:center">
+    <a href="/" style="font-weight:800;letter-spacing:-.02em;display:flex;align-items:center;gap:8px">
+      <span style="width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#3b82f6,#22d3ee);display:grid;place-items:center;font-weight:900;color:white;font-size:13px">F</span>
+      FaceDocs
+    </a>
+    <span class="badge">Admin</span>
+    <span id="conn" class="badge">—</span>
+  </div>
+  <div class="row" style="flex-wrap:nowrap">
+    <span id="who" style="color:var(--muted);font-size:13px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+    <button class="btn btn-sm" onclick="logout()">Logout</button>
+  </div>
 </nav>
 
 <div id="loginView" class="login card">
-  <h2>Admin Login</h2>
-  <p style="color:var(--muted);font-size:13px;margin:8px 0 14px">Use VPS credentials — default <code>root / 87877878@Kk##</code> maps to admin auth. Override with env <code>ADMIN_USER / ADMIN_PASS</code>.</p>
-  <div style="display:flex;flex-direction:column;gap:10px">
-    <input id="u" class="input" placeholder="Username (admin)" value="admin"/>
-    <input id="p" class="input" type="password" placeholder="Password"/>
-    <button class="btn btn-primary" onclick="doLogin()">Login</button>
-    <div id="loginMsg" style="font-size:13px;color:#f87171"></div>
-    <div style="font-size:12px;color:var(--muted)">Health: <a href="/api/health" target="_blank">/api/health</a> • VPS 82.25.90.196</div>
+  <h2 style="font-size:20px;font-weight:800">Admin Login</h2>
+  <p style="color:var(--muted);font-size:13px;margin:8px 0 16px;line-height:1.5">Use VPS credentials — default <code>admin / 87877878@Kk##</code>. You can override with env <code>ADMIN_USER / ADMIN_PASS</code> on the server.</p>
+  <div style="display:flex;flex-direction:column;gap:11px">
+    <input id="u" class="input" placeholder="Username (admin)" value="admin" autocomplete="username"/>
+    <input id="p" class="input" type="password" placeholder="Password" autocomplete="current-password"/>
+    <button class="btn btn-primary" style="width:100%;padding:11px" onclick="doLogin()">Login</button>
+    <div id="loginMsg" style="font-size:13px;color:#f87171;min-height:18px"></div>
+    <div style="font-size:12px;color:var(--muted)">Health: <a href="/api/health" target="_blank">/api/health</a> • VPS 82.25.90.196 • <a href="/" >← Login page</a></div>
   </div>
 </div>
 
-<div id="dash" class="hidden" style="max-width:1100px;margin:20px auto;padding:0 16px">
-  <div class="grid" style="margin-bottom:16px">
-    <div class="card"><div style="color:var(--muted);font-size:12px;letter-spacing:.06em">TOTAL KEYS</div><div id="m-keys" style="font-size:28px;font-weight:800">—</div><div style="color:var(--muted);font-size:12px" id="m-keys2"></div></div>
-    <div class="card"><div style="color:var(--muted);font-size:12px">ACTIVATIONS</div><div id="m-act" style="font-size:28px;font-weight:800">—</div><div style="color:var(--muted);font-size:12px">devices bound</div></div>
-    <div class="card"><div style="color:var(--muted);font-size:12px">DOMAIN</div><div style="font-size:18px;font-weight:800">facedocs.bond</div><div style="color:var(--muted);font-size:12px">→ 82.25.90.196 • <span id="m-time"></span></div></div>
-  </div>
-
-  <div class="card">
-    <h3>Create Key</h3>
-    <div style="display:grid;grid-template-columns:1.2fr .6fr .6fr .6fr auto;gap:8px;margin-top:10px">
-      <input id="ck-key" class="input" placeholder="Key (leave empty to auto-generate with prefix)"/>
-      <input id="ck-prefix" class="input" placeholder="Prefix FACE" value="FACE"/>
-      <input id="ck-max" class="input" type="number" value="1" min="1" placeholder="max devices"/>
-      <select id="ck-type" class="input"><option value="paid">Paid</option><option value="trial">Trial (24h)</option><option value="lifetime">Lifetime</option></select>
-      <input id="ck-days" class="input" type="number" value="30" placeholder="days"/>
+<div id="dash" class="hidden">
+  <div class="container" style="padding-top:20px;padding-bottom:20px">
+    <div class="stats-grid" style="margin-bottom:16px">
+      <div class="card"><div style="color:var(--muted);font-size:11px;letter-spacing:.06em;text-transform:uppercase">Total Keys</div><div id="m-keys" style="font-size:30px;font-weight:800;margin-top:4px">—</div><div style="color:var(--muted);font-size:12px" id="m-keys2"></div></div>
+      <div class="card"><div style="color:var(--muted);font-size:11px;letter-spacing:.06em;text-transform:uppercase">Activations</div><div id="m-act" style="font-size:30px;font-weight:800;margin-top:4px">—</div><div style="color:var(--muted);font-size:12px">devices bound</div></div>
+      <div class="card"><div style="color:var(--muted);font-size:11px;letter-spacing:.06em;text-transform:uppercase">Domain</div><div style="font-size:18px;font-weight:800;margin-top:4px;word-break:break-all">facedocs.bond</div><div style="color:var(--muted);font-size:12px">→ 82.25.90.196 • <span id="m-time"></span></div></div>
     </div>
-    <div class="row" style="margin-top:8px">
-      <input id="ck-note" class="input" placeholder="Note (optional)"/>
-      <button class="btn" onclick="autoGen()">+ Generate</button>
-      <button class="btn btn-primary" onclick="createKey()">Create</button>
-    </div>
-    <div class="row" style="margin-top:8px">
-      <button class="btn" onclick="bulkGen()">Bulk generate 10</button>
-      <span style="color:var(--muted);font-size:12px">Bulk uses prefix + random 5+4 hex</span>
-    </div>
-  </div>
 
-  <div class="card" style="margin-top:16px;overflow:auto">
-    <div class="row" style="justify-content:space-between"><h3>Keys</h3><button class="btn" onclick="loadKeys()">↻ Refresh</button></div>
-    <table id="keysTbl"><thead><tr><th>Key</th><th>Type</th><th>Devices</th><th>Status</th><th>Expires</th><th>Note</th><th></th></tr></thead><tbody></tbody></table>
-  </div>
-
-  <div class="card" style="margin-top:16px;overflow:auto">
-    <div class="row" style="justify-content:space-between"><h3>Activations (devices)</h3><button class="btn" onclick="loadActs()">↻ Refresh</button></div>
-    <table id="actsTbl"><thead><tr><th>Key</th><th>Device ID</th><th>Android ID</th><th>WiFi IP</th><th>Token (prefix)</th><th>Expires</th><th>Last Seen</th><th></th></tr></thead><tbody></tbody></table>
-  </div>
-
-  <div class="card" style="margin-top:16px">
-    <h3>API Quick Test</h3>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px">
-      <div>
-        <div style="font-size:13px;color:var(--muted)">POST /api/validate_key</div>
-        <textarea id="t-validate" class="input" rows="4" style="font-family:monospace;font-size:12px">{"key":"NOWORNEVER","device_id":"test-device-001"}</textarea>
-        <button class="btn btn-primary" style="margin-top:6px" onclick="testValidate()">Test validate_key</button>
-        <pre id="o-validate" class="kbd" style="margin-top:6px;white-space:pre-wrap;min-height:60px"></pre>
+    <div class="card">
+      <h3 style="font-size:15px;font-weight:700">Create Key</h3>
+      <p style="color:var(--muted);font-size:12px;margin-top:4px">Leave key empty to auto-generate. Trial = 24h per device.</p>
+      <div class="create-grid" id="createGrid">
+        <input id="ck-key" class="input" placeholder="Key (leave empty to auto-generate with prefix)"/>
+        <input id="ck-prefix" class="input" placeholder="Prefix FACE" value="FACE"/>
+        <input id="ck-max" class="input" type="number" value="1" min="1" placeholder="max devices"/>
+        <select id="ck-type" class="input">
+          <option value="paid">Paid</option>
+          <option value="trial">Trial (24h)</option>
+          <option value="lifetime">Lifetime</option>
+        </select>
+        <input id="ck-days" class="input" type="number" value="30" placeholder="days"/>
       </div>
-      <div>
-        <div style="font-size:13px;color:var(--muted)">POST /api/activate (HMAC)</div>
-        <textarea id="t-activate" class="input" rows="4" style="font-family:monospace;font-size:12px">{"key":"NOWORNEVER","device_id":"test-device-002","android_id":"abc123","wifi_bssid":"aa:bb:cc:dd:ee:ff","wifi_ip":"192.168.1.5","build_fp":"google/sdk","rid":"test-rid-123"}</textarea>
-        <button class="btn btn-primary" style="margin-top:6px" onclick="testActivate()">Test activate</button>
-        <pre id="o-activate" class="kbd" style="margin-top:6px;white-space:pre-wrap;min-height:60px"></pre>
+      <div class="create-actions">
+        <div class="note-row">
+          <input id="ck-note" class="input" placeholder="Note (optional)"/>
+        </div>
+        <button class="btn" onclick="autoGen()">+ Generate</button>
+        <button class="btn btn-primary" onclick="createKey()">Create</button>
+        <button class="btn" onclick="bulkGen()">Bulk 10</button>
+      </div>
+      <div style="color:var(--muted);font-size:11px;margin-top:8px">Bulk uses prefix + random 5+4 hex • Lifetime ignores days</div>
+    </div>
+
+    <div class="card table-card" style="margin-top:16px">
+      <div class="table-head"><h3 style="font-size:14px;font-weight:700">Keys</h3><button class="btn btn-sm" onclick="loadKeys()">↻ Refresh</button></div>
+      <div class="table-wrap">
+        <table id="keysTbl"><thead><tr><th>Key</th><th>Type</th><th>Devices</th><th>Status</th><th>Expires</th><th>Note</th><th></th></tr></thead><tbody></tbody></table>
       </div>
     </div>
+
+    <div class="card table-card" style="margin-top:16px">
+      <div class="table-head"><h3 style="font-size:14px;font-weight:700">Activations (devices)</h3><button class="btn btn-sm" onclick="loadActs()">↻ Refresh</button></div>
+      <div class="table-wrap">
+        <table id="actsTbl"><thead><tr><th>Key</th><th>Device ID</th><th>Android ID</th><th>WiFi IP</th><th>Token (prefix)</th><th>Expires</th><th>Last Seen</th><th></th></tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <h3 style="font-size:14px;font-weight:700">API Quick Test</h3>
+      <div class="api-grid">
+        <div>
+          <div style="font-size:13px;color:var(--muted);margin-bottom:6px">POST /api/validate_key</div>
+          <textarea id="t-validate" class="input" rows="4" style="font-family:ui-monospace,monospace;font-size:12px">{"key":"NOWORNEVER","device_id":"test-device-001"}</textarea>
+          <button class="btn btn-primary" style="margin-top:8px;width:100%" onclick="testValidate()">Test validate_key</button>
+          <pre id="o-validate" class="kbd" style="margin-top:8px;white-space:pre-wrap;min-height:60px;padding:10px;overflow:auto;max-height:240px"></pre>
+        </div>
+        <div>
+          <div style="font-size:13px;color:var(--muted);margin-bottom:6px">POST /api/activate (HMAC)</div>
+          <textarea id="t-activate" class="input" rows="4" style="font-family:ui-monospace,monospace;font-size:12px">{"key":"NOWORNEVER","device_id":"test-device-002","android_id":"abc123","wifi_bssid":"aa:bb:cc:dd:ee:ff","wifi_ip":"192.168.1.5","build_fp":"google/sdk","rid":"test-rid-123"}</textarea>
+          <button class="btn btn-primary" style="margin-top:8px;width:100%" onclick="testActivate()">Test activate</button>
+          <pre id="o-activate" class="kbd" style="margin-top:8px;white-space:pre-wrap;min-height:60px;padding:10px;overflow:auto;max-height:240px"></pre>
+        </div>
+      </div>
+    </div>
+
+    <div style="text-align:center;color:var(--muted);font-size:11px;margin-top:16px">© 2026 FaceDocs • facedocs.bond • V4.7.8</div>
   </div>
 </div>
 
@@ -180,8 +346,8 @@ async function loadKeys(){
       <td>${k.used_count}/${k.max_devices} <span style="color:var(--muted)">rem ${k.remaining}</span></td>
       <td><span class="badge ${badgeCls}">${status}</span></td>
       <td style="font-size:12px">${k.expires_at? new Date(k.expires_at).toLocaleDateString(): '<span style="color:var(--muted)">lifetime/trial</span>'}</td>
-      <td style="color:var(--muted);font-size:12px">${k.note||''}</td>
-      <td><button class="btn" onclick="statusKey('${k.key}')">status</button> <button class="btn" style="color:#f87171" onclick="delKey(${k.id})">del</button></td>`;
+      <td style="color:var(--muted);font-size:12px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(k.note||'').replace(/"/g,'&quot;')}">${k.note||''}</td>
+      <td style="display:flex;gap:6px"><button class="btn btn-sm" onclick="statusKey('${k.key}')">status</button> <button class="btn btn-sm" style="color:#f87171;border-color:rgba(239,68,68,.3)" onclick="delKey(${k.id})">del</button></td>`;
     tb.appendChild(tr);
   });
 }
@@ -192,13 +358,13 @@ async function loadActs(){
     const tr=document.createElement('tr');
     tr.innerHTML=`
       <td><span class="kbd">${a.keyText}</span></td>
-      <td class="kbd">${a.deviceId.slice(0,16)}…</td>
+      <td><span class="kbd" title="${a.deviceId}">${a.deviceId.slice(0,16)}…</span></td>
       <td style="font-size:11px;color:var(--muted)">${a.androidId||'—'}</td>
       <td>${a.wifiIp||'—'}</td>
-      <td class="kbd">${(a.token||'').slice(0,14)}…</td>
+      <td><span class="kbd">${(a.token||'').slice(0,14)}…</span></td>
       <td style="font-size:12px">${a.expiresAt? new Date(a.expiresAt).toLocaleString(): '—'}</td>
       <td style="font-size:12px">${a.lastSeen? new Date(a.lastSeen).toLocaleString(): '—'}</td>
-      <td><button class="btn" style="color:#f87171" onclick="revoke('${a.deviceId}','${a.keyText}')">revoke</button></td>`;
+      <td><button class="btn btn-sm" style="color:#f87171;border-color:rgba(239,68,68,.3)" onclick="revoke('${a.deviceId}','${a.keyText}')">revoke</button></td>`;
     tb.appendChild(tr);
   });
 }
@@ -211,7 +377,6 @@ async function createKey(){
   const note=document.getElementById('ck-note').value.trim();
   let finalKey=key;
   if(!finalKey){
-    // generate one
     const rand = [...crypto.getRandomValues(new Uint8Array(3))].map(b=>b.toString(16).padStart(2,'0')).join('').toUpperCase();
     const rand2 = [...crypto.getRandomValues(new Uint8Array(2))].map(b=>b.toString(16).padStart(2,'0')).join('').toUpperCase();
     finalKey = `${prefix}-${rand}-${rand2}`;
@@ -260,14 +425,12 @@ async function testValidate(){
 }
 async function testActivate(){
   const body=JSON.parse(document.getElementById('t-activate').value||'{}');
-  // ensure rid
   if(!body.rid) body.rid='test-'+Math.random().toString(36).slice(2,8);
   const {j}=await api('/api/activate','POST',body, true);
   document.getElementById('o-activate').textContent=JSON.stringify(j,null,2);
 }
 async function loadAll(){ loadStats(); loadKeys(); loadActs(); }
 
-// polyfill crypto.getRandomValues for inline gen handled by window.crypto
 window.doLogin=doLogin; window.logout=logout; window.createKey=createKey; window.autoGen=autoGen; window.bulkGen=bulkGen; window.loadKeys=loadKeys; window.loadActs=loadActs; window.delKey=delKey; window.revoke=revoke; window.statusKey=statusKey; window.testValidate=testValidate; window.testActivate=testActivate;
 
 checkAuth().then(ok=>{ if(ok) loadAll(); });
