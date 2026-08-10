@@ -56,8 +56,7 @@ a{color:#60a5fa;text-decoration:none}
     FaceGate <span style="color:var(--muted);font-weight:500">Editor</span>
   </a>
   <div style="display:flex;gap:8px;align-items:center">
-    <label class="btn btn-sm" for="psdFile" style="cursor:pointer">📂 Upload PSD</label>
-    <input id="psdFile" type="file" style="position:absolute;left:-9999px;opacity:0;width:1px;height:1px;overflow:hidden" accept="*/*"/>
+    <button class="btn btn-sm" onclick="document.getElementById('psdFile').click()">📂 Upload PSD</button>
     <button class="btn btn-primary btn-sm" onclick="exportPNG()">⬇ Export PNG</button>
     <button class="btn btn-sm hidden" id="saveServerBtn" onclick="uploadPsdToServer()">☁ Save to VPS</button>
     <a class="btn btn-sm" href="/download">Download APK</a>
@@ -69,12 +68,14 @@ a{color:#60a5fa;text-decoration:none}
   <div class="panel">
     <div class="panel-head"><span>Layers</span><span id="layerCount" class="kbd">0</span></div>
     <div class="panel-body">
-      <div id="dropZone" class="drop" onclick="document.getElementById('psdFile').click()">
+      <div id="dropZone" class="drop" style="position:relative;overflow:hidden">
+        <input id="psdFile" type="file" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer" accept="*/*"/>
         <div style="font-size:22px">🎨</div>
         <div style="margin-top:6px;font-weight:600">Drop .psd here</div>
         <div style="font-size:11px;margin-top:2px">or click to browse — choose <b>Files</b></div>
         <div class="kbd" style="margin:8px auto 0;display:inline-block">.psd → edit → PNG</div>
-        <div style="font-size:10px;color:var(--muted);margin-top:6px;line-height:1.4">On phone: tap <b>Browse</b> / <b>Files</b> at the top<br>then go to Downloads/Documents to find your .psd<br><span style="color:#60a5fa">No filter now — shows all files</span></div>
+        <div style="font-size:10px;color:var(--muted);margin-top:6px;line-height:1.4">On phone: tap <b>Browse</b> / <b>Files</b> at the top<br>then go to Downloads/Documents to find your .psd<br><span style="color:#60a5fa">Now shows all files</span></div>
+        <div id="psdStatus" style="font-size:11px;color:#60a5fa;margin-top:8px;min-height:14px"></div>
       </div>
       <div style="margin-top:12px;padding:10px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px">
         <div style="font-size:11px;font-weight:600;color:var(--muted)">Direct VPS upload (if editor won't load):</div>
@@ -511,10 +512,28 @@ async function directUpload(e){
   }
 }
 async function handleFile(file){
-  if(!file) return;
+  if(!file){
+    document.getElementById('psdStatus').textContent = 'No file selected — try again';
+    return;
+  }
+  const status = document.getElementById('psdStatus');
+  status.textContent = 'Selected: ' + file.name + ' (' + (file.size/1024).toFixed(1) + ' KB) — loading…';
+  status.style.color = '#60a5fa';
+  console.log('handleFile:', file.name, file.size, file.type);
   currentPsdFile=file;
   document.getElementById('saveServerBtn').classList.remove('hidden');
-  const buf = await file.arrayBuffer();
+  let buf;
+  try{
+    buf = await file.arrayBuffer();
+    console.log('arrayBuffer ok', buf.byteLength);
+    status.textContent = 'Parsing ' + file.name + '...';
+  }catch(e){
+    console.error('arrayBuffer fail', e);
+    status.textContent = '❌ Failed to read file: ' + e.message;
+    status.style.color = '#f87171';
+    alert('Failed to read file: '+e.message);
+    return;
+  }
   // Try ag-psd first, then fallback to psd.js for files that ag-psd fails on (like Belarus_DL.psd)
   let psdObj = null;
   let lastError = null;
