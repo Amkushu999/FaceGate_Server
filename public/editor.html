@@ -353,14 +353,15 @@ function applyText(){
     const lines = newTxt.split('\\n');
     lines.forEach((ln,i)=> g.fillText(ln, 4, 4 + i*(newSize*1.2)));
     layer.canvas = c;
+    if(layer.imageData) delete layer.imageData;
     layer.right = layer.left + w;
     layer.bottom = layer.top + h;
     // store style for next edit
     if(!layer.text.style) layer.text.style={};
     layer.text.style.fontSize=newSize;
     layer.text.style.fillColor=hexToRgb(newColor);
-    // invalidate full composite so next render composites edited layers (full view)
-    if(psd) psd.canvas = null;
+    // invalidate full composite so next render composites edited layers (full view) — clear both canvas and imageData
+    if(psd){ psd.canvas = null; if(psd.imageData) delete psd.imageData; }
   }catch(e){ alert('Text update failed: '+e.message); }
   buildLayerList();
   render();
@@ -383,7 +384,8 @@ document.getElementById('imgReplace').addEventListener('change', e=>{
     const nw=img.width*scale, nh=img.height*scale;
     g.drawImage(img, (w-nw)/2, (h-nh)/2, nw, nh);
     layer.canvas=c;
-    if(psd) psd.canvas = null;
+    if(layer.imageData) delete layer.imageData;
+    if(psd){ psd.canvas = null; if(psd.imageData) delete psd.imageData; }
     URL.revokeObjectURL(url);
     buildLayerList();
     render();
