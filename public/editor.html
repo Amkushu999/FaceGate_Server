@@ -150,31 +150,43 @@ function render(){
   const w = psd.width, h = psd.height;
   canvas.width = w; canvas.height = h;
   ctx.clearRect(0,0,w,h);
-  // white behind transparent checker
-  ctx.fillStyle = '#0b1220';
-  ctx.fillRect(0,0,w,h);
-  // draw layers bottom to top (psd children is top to bottom, so reverse)
-  const list = [...flatLayers].reverse();
-  list.forEach(({layer})=>{
-    if(layer.hidden) return;
-    if(!layer.canvas) return;
+  // try to draw full flattened PSD first (psd.canvas is the composite when useImageData:true)
+  let drewFull = false;
+  if(psd.canvas){
     try{
-      // layer.canvas is already a canvas-like with width/height and getContext
-      const c = layer.canvas;
-      // position
-      const x = layer.left ?? 0;
-      const y = layer.top ?? 0;
-      ctx.globalAlpha = (layer.opacity ?? 255)/255;
-      ctx.drawImage(c, x, y);
-      ctx.globalAlpha = 1;
-    }catch(e){ console.warn('draw layer fail', e); }
-    // highlight selected
-    if(selected && selected.layer === layer){
+      ctx.drawImage(psd.canvas, 0, 0);
+      drewFull = true;
+    }catch(e){ console.warn('full canvas draw fail', e); }
+  }
+  if(!drewFull){
+    // fallback: composite layers manually (bottom to top)
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(0,0,w,h);
+    const list = [...flatLayers].reverse();
+    list.forEach(({layer})=>{
+      if(layer.hidden) return;
+      if(!layer.canvas) return;
+      try{
+        const c = layer.canvas;
+        const x = layer.left ?? 0;
+        const y = layer.top ?? 0;
+        ctx.globalAlpha = (layer.opacity ?? 255)/255;
+        ctx.drawImage(c, x, y);
+        ctx.globalAlpha = 1;
+      }catch(e){ console.warn('draw layer fail', e); }
+    });
+  }
+  // highlight selected layer
+  if(selected && selected.layer){
+    const l = selected.layer;
+    if(l.left !== undefined && l.top !== undefined){
       ctx.strokeStyle = '#3b82f6';
-      ctx.lineWidth = 1;
-      ctx.strokeRect((layer.left??0)-0.5, (layer.top??0)-0.5, (layer.canvas?.width||layer.right-layer.left||0)+1, (layer.canvas?.height||layer.bottom-layer.top||0)+1);
+      ctx.lineWidth = 2 / (window.devicePixelRatio || 1);
+      const ww = l.canvas?.width || (l.right - l.left) || 0;
+      const hh = l.canvas?.height || (l.bottom - l.top) || 0;
+      if(ww>0 && hh>0) ctx.strokeRect((l.left??0)-0.5, (l.top??0)-0.5, ww+1, hh+1);
     }
-  });
+  }
 }
 
 function buildLayerList(){
@@ -300,6 +312,8 @@ function applyText(){
     if(!layer.text.style) layer.text.style={};
     layer.text.style.fontSize=newSize;
     layer.text.style.fillColor=hexToRgb(newColor);
+    // invalidate full composite so next render composites edited layers (full view)
+    if(psd) psd.canvas = null;
   }catch(e){ alert('Text update failed: '+e.message); }
   buildLayerList();
   render();
@@ -322,6 +336,7 @@ document.getElementById('imgReplace').addEventListener('change', e=>{
     const nw=img.width*scale, nh=img.height*scale;
     g.drawImage(img, (w-nw)/2, (h-nh)/2, nw, nh);
     layer.canvas=c;
+    if(psd) psd.canvas = null;
     URL.revokeObjectURL(url);
     buildLayerList();
     render();
