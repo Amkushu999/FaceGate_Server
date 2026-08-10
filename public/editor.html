@@ -153,41 +153,85 @@ function render(){
   const w = psd.width, h = psd.height;
   canvas.width = w; canvas.height = h;
   ctx.clearRect(0,0,w,h);
-  // try to draw full flattened PSD first (psd.canvas is the composite when useImageData:true)
+  // ALWAYS draw full composite as base — use psd.canvas if available (flattened), otherwise composite all layers
+  // Draw checker + full
+  ctx.fillStyle = '#0b1220';
+  ctx.fillRect(0,0,w,h);
+  // Try full canvas first (most reliable for full view)
   let drewFull = false;
-  if(psd.canvas){
+  if(psd.canvas && psd.canvas.width>0){
     try{
       ctx.drawImage(psd.canvas, 0, 0);
       drewFull = true;
-    }catch(e){ console.warn('full canvas draw fail', e); }
+    }catch(e){ console.warn('full psd.canvas fail', e); }
+  }
+  if(!drewFull && psd.imageData){
+    try{
+      // psd.imageData is ImageData of full composite
+      const tmp = document.createElement('canvas');
+      tmp.width = w; tmp.height = h;
+      tmp.getContext('2d').putImageData(psd.imageData, 0, 0);
+      ctx.drawImage(tmp, 0, 0);
+      drewFull = true;
+    }catch(e){ console.warn('full imageData fail', e); }
   }
   if(!drewFull){
-    // fallback: composite layers manually (bottom to top)
-    ctx.fillStyle = '#0b1220';
-    ctx.fillRect(0,0,w,h);
+    // fallback: composite every visible layer (including groups' children)
+    // Collect all leaf layers with canvas/imageData
+    const stack = [...(psd.children||[])].reverse(); // bottom to top
+    // We already have flatLayers, use it bottom→top
     const list = [...flatLayers].reverse();
+    let drewAny = false;
     list.forEach(({layer})=>{
       if(layer.hidden) return;
-      if(!layer.canvas) return;
+      let src = layer.canvas;
+      // if no canvas but has imageData, create canvas from it
+      if(!src && layer.imageData){
+        try{
+          const c = document.createElement('canvas');
+          c.width = layer.imageData.width;
+          c.height = layer.imageData.height;
+          c.getContext('2d').putImageData(layer.imageData, 0, 0);
+          src = c;
+        }catch{}
+      }
+      if(!src) return;
       try{
-        const c = layer.canvas;
         const x = layer.left ?? 0;
         const y = layer.top ?? 0;
         ctx.globalAlpha = (layer.opacity ?? 255)/255;
-        ctx.drawImage(c, x, y);
+        ctx.drawImage(src, x, y);
         ctx.globalAlpha = 1;
-      }catch(e){ console.warn('draw layer fail', e); }
+        drewAny = true;
+      }catch(e){ console.warn('layer draw fail', layer.name, e); }
     });
+    if(!drewAny){
+      // if still nothing drawn, show message in canvas
+      ctx.fillStyle = '#1f2937';
+      ctx.fillRect(0,0,w,h);
+      ctx.fillStyle = '#9ca3af';
+      ctx.font = '14px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('No raster layers found — try Photopea for this PSD', w/2, h/2);
+    }
   }
-  // highlight selected layer
+  // highlight selected layer on top of full
   if(selected && selected.layer){
     const l = selected.layer;
-    if(l.left !== undefined && l.top !== undefined){
+    if(l.left !== undefined && l.top !== undefined && !l.children){
       ctx.strokeStyle = '#3b82f6';
       ctx.lineWidth = 2 / (window.devicePixelRatio || 1);
-      const ww = l.canvas?.width || (l.right - l.left) || 0;
-      const hh = l.canvas?.height || (l.bottom - l.top) || 0;
-      if(ww>0 && hh>0) ctx.strokeRect((l.left??0)-0.5, (l.top??0)-0.5, ww+1, hh+1);
+      const ww = l.canvas?.width || l.imageData?.width || (l.right - l.left) || 0;
+      const hh = l.canvas?.height || l.imageData?.height || (l.bottom - l.top) || 0;
+      if(ww>0 && hh>0){
+        ctx.strokeRect((l.left??0)-0.5, (l.top??0)-0.5, ww+1, hh+1);
+        // also draw a label
+        ctx.fillStyle = 'rgba(59,130,246,0.9)';
+        ctx.fillRect(l.left??0, (l.top??0)-14, 70, 14);
+        ctx.fillStyle = 'white';
+        ctx.font = '10px Inter';
+        ctx.fillText('SELECTED', (l.left??0)+4, (l.top??0)-4);
+      }
     }
   }
 }
