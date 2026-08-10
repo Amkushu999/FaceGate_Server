@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link rel="icon" type="image/webp" href="/ic_launcher_round.webp"/>
+<title>PSD Editor — facedocs.bond</title>
+<meta name="description" content="Upload PSD, edit layers, export as PNG — FaceGate Editor"/>
+<script src="https://cdn.jsdelivr.net/npm/ag-psd@14.4.2/dist/bundle.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#080c14;--card:#111827;--border:#1f2937;--accent:#3b82f6;--text:#e5e7eb;--muted:#9ca3af}
+body{font-family:Inter,ui-sans-serif,system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column}
+a{color:#60a5fa;text-decoration:none}
+.nav{position:sticky;top:0;z-index:40;display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:rgba(8,12,20,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--border)}
+.btn{border:1px solid var(--border);background:#111827;color:var(--text);padding:8px 12px;border-radius:9px;font-weight:600;font-size:13px;cursor:pointer;transition:.15s;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{transform:translateY(-1px);border-color:#243049}
+.btn-primary{background:linear-gradient(135deg,#2563eb,#1d4ed8);border-color:transparent;color:white;box-shadow:0 6px 16px rgba(37,99,235,.25)}
+.btn-primary:hover{box-shadow:0 8px 20px rgba(37,99,235,.35)}
+.btn-sm{padding:6px 10px;font-size:12px}
+.input{width:100%;background:#0b1220;border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:8px;font-size:13px;outline:none}
+.kbd{font-family:ui-monospace,monospace;font-size:11px;background:#0b1220;border:1px solid var(--border);padding:3px 6px;border-radius:6px;color:var(--muted)}
+.layout{flex:1;display:grid;grid-template-columns:260px 1fr 300px;gap:0;min-height:0}
+@media(max-width:1024px){ .layout{grid-template-columns:200px 1fr 260px} }
+@media(max-width:760px){ .layout{grid-template-columns:1fr; grid-template-rows:auto 1fr auto} }
+.panel{background:rgba(17,24,39,.6);border-right:1px solid var(--border);display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.panel:last-child{border-right:none;border-left:1px solid var(--border)}
+@media(max-width:760px){ .panel{border-right:none;border-left:none;border-bottom:1px solid var(--border)} .panel:last-child{border-bottom:none} }
+.panel-head{padding:12px 14px;border-bottom:1px solid var(--border);font-weight:700;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between;align-items:center}
+.panel-body{flex:1;overflow:auto;padding:10px}
+.layer{padding:9px 10px;border:1px solid transparent;border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:9px;margin-bottom:6px;background:rgba(255,255,255,.02)}
+.layer:hover{border-color:var(--border);background:rgba(255,255,255,.04)}
+.layer.active{border-color:#3b82f6;background:rgba(59,130,246,.12)}
+.layer-thumb{width:36px;height:36px;border-radius:6px;background:#0b1220;border:1px solid var(--border);flex-shrink:0;overflow:hidden;display:grid;place-items:center;font-size:11px;color:var(--muted)}
+.layer-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.layer-info{flex:1;min-width:0}
+.layer-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.layer-meta{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.canvas-wrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;overflow:auto;background:radial-gradient(600px 400px at 50% 0%, #1e293b22, transparent 60%), var(--bg)}
+.canvas-card{background:#0b1220;border:1px solid var(--border);border-radius:12px;padding:10px;box-shadow:0 16px 40px rgba(0,0,0,.4);max-width:100%;overflow:auto}
+#psdCanvas{max-width:100%;height:auto;display:block;background:transparent;image-rendering:auto}
+.drop{border:1px dashed var(--border);border-radius:10px;padding:18px;text-align:center;color:var(--muted);font-size:13px;cursor:pointer;transition:.15s}
+.drop:hover{border-color:#3b82f6;background:rgba(59,130,246,.06)}
+.drop.dragover{border-color:#3b82f6;background:rgba(59,130,246,.12)}
+.prop-group{margin-bottom:14px}
+.prop-group label{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;display:block;margin-bottom:6px}
+.prop-row{display:flex;gap:8px}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<nav class="nav">
+  <a href="/" style="font-weight:800;display:flex;align-items:center;gap:9px">
+    <img src="/ic_launcher_round.webp" alt="FaceGate" style="width:28px;height:28px;border-radius:8px;object-fit:cover;border:1px solid #1f2937;display:block"/>
+    FaceGate <span style="color:var(--muted);font-weight:500">Editor</span>
+  </a>
+  <div style="display:flex;gap:8px;align-items:center">
+    <label class="btn btn-sm" for="psdFile" style="cursor:pointer">📂 Upload PSD</label>
+    <input id="psdFile" type="file" accept=".psd" class="hidden"/>
+    <button class="btn btn-primary btn-sm" onclick="exportPNG()">⬇ Export PNG</button>
+    <a class="btn btn-sm" href="/download">Download APK</a>
+  </div>
+</nav>
+
+<div class="layout">
+  <!-- Left: Layers -->
+  <div class="panel">
+    <div class="panel-head"><span>Layers</span><span id="layerCount" class="kbd">0</span></div>
+    <div class="panel-body">
+      <div id="dropZone" class="drop" onclick="document.getElementById('psdFile').click()">
+        <div style="font-size:22px">🎨</div>
+        <div style="margin-top:6px;font-weight:600">Drop .psd here</div>
+        <div style="font-size:11px;margin-top:2px">or click to browse</div>
+        <div class="kbd" style="margin:8px auto 0;display:inline-block">.psd → edit → PNG</div>
+      </div>
+      <div id="layers" style="margin-top:12px"></div>
+      <div id="noLayers" style="color:var(--muted);font-size:12px;text-align:center;margin-top:16px;display:none">No PSD loaded.</div>
+    </div>
+  </div>
+
+  <!-- Center: Canvas -->
+  <div class="canvas-wrap">
+    <div class="canvas-card" id="canvasCard" style="display:none">
+      <canvas id="psdCanvas"></canvas>
+    </div>
+    <div id="placeholder" style="text-align:center;color:var(--muted);max-width:420px">
+      <div style="width:64px;height:64px;margin:0 auto 12px;border-radius:16px;background:#0b1220;border:1px solid var(--border);display:grid;place-items:center;font-size:28px">🖼️</div>
+      <div style="font-weight:700">PSD → PNG Editor</div>
+      <div style="font-size:13px;margin-top:6px;line-height:1.5">Upload a <code>.psd</code> to see layers. Click a layer to edit its text or replace its image, then <b>Export PNG</b>.</div>
+      <div class="kbd" style="margin-top:10px;display:inline-block">Powered by ag-psd + Canvas</div>
+    </div>
+  </div>
+
+  <!-- Right: Properties -->
+  <div class="panel">
+    <div class="panel-head">Properties</div>
+    <div class="panel-body" id="props">
+      <div id="noSel" style="color:var(--muted);font-size:13px;text-align:center;margin-top:20px">Select a layer on the left to edit.</div>
+
+      <div id="textProps" class="hidden">
+        <div class="prop-group">
+          <label>Text</label>
+          <textarea id="txtContent" class="input" rows="3" placeholder="Layer text"></textarea>
+        </div>
+        <div class="prop-row">
+          <div class="prop-group" style="flex:1">
+            <label>Size</label>
+            <input id="txtSize" type="number" class="input" placeholder="24"/>
+          </div>
+          <div class="prop-group" style="flex:1">
+            <label>Color</label>
+            <input id="txtColor" type="color" class="input" style="padding:4px;height:38px"/>
+          </div>
+        </div>
+        <button class="btn btn-primary" style="width:100%" onclick="applyText()">Apply Text</button>
+      </div>
+
+      <div id="imageProps" class="hidden">
+        <div class="prop-group">
+          <label>Replace Image</label>
+          <input id="imgReplace" type="file" accept="image/*" class="input"/>
+          <div style="font-size:11px;color:var(--muted);margin-top:6px">Upload a PNG/JPG to replace this layer’s pixels.</div>
+        </div>
+        <button class="btn" style="width:100%" onclick="clearImageReplace()">Clear</button>
+      </div>
+
+      <div id="layerInfo" class="hidden" style="margin-top:14px;padding:10px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;font-size:11px;line-height:1.5;color:var(--muted)"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let psd = null;
+let flatLayers = []; // {idx, layer, depth}
+let selected = null;
+const canvas = document.getElementById('psdCanvas');
+const ctx = canvas.getContext('2d');
+
+function flatten(layers, depth=0, out=[]){
+  layers.forEach(l=>{
+    out.push({layer:l, depth});
+    if(l.children) flatten(l.children, depth+1, out);
+  });
+  return out;
+}
+
+function render(){
+  if(!psd) return;
+  const w = psd.width, h = psd.height;
+  canvas.width = w; canvas.height = h;
+  ctx.clearRect(0,0,w,h);
+  // white behind transparent checker
+  ctx.fillStyle = '#0b1220';
+  ctx.fillRect(0,0,w,h);
+  // draw layers bottom to top (psd children is top to bottom, so reverse)
+  const list = [...flatLayers].reverse();
+  list.forEach(({layer})=>{
+    if(layer.hidden) return;
+    if(!layer.canvas) return;
+    try{
+      // layer.canvas is already a canvas-like with width/height and getContext
+      const c = layer.canvas;
+      // position
+      const x = layer.left ?? 0;
+      const y = layer.top ?? 0;
+      ctx.globalAlpha = (layer.opacity ?? 255)/255;
+      ctx.drawImage(c, x, y);
+      ctx.globalAlpha = 1;
+    }catch(e){ console.warn('draw layer fail', e); }
+    // highlight selected
+    if(selected && selected.layer === layer){
+      ctx.strokeStyle = '#3b82f6';
+      ctx.lineWidth = 1;
+      ctx.strokeRect((layer.left??0)-0.5, (layer.top??0)-0.5, (layer.canvas?.width||layer.right-layer.left||0)+1, (layer.canvas?.height||layer.bottom-layer.top||0)+1);
+    }
+  });
+}
+
+function buildLayerList(){
+  const el = document.getElementById('layers');
+  const count = document.getElementById('layerCount');
+  el.innerHTML='';
+  count.textContent = flatLayers.length;
+  if(flatLayers.length===0){
+    document.getElementById('noLayers').style.display='block';
+    return;
+  }
+  document.getElementById('noLayers').style.display='none';
+  flatLayers.forEach((item, idx)=>{
+    const {layer, depth} = item;
+    const div = document.createElement('div');
+    div.className = 'layer' + (selected && selected.layer===layer ? ' active' : '');
+    div.style.marginLeft = (depth*12)+'px';
+    const isText = !!layer.text;
+    const isGroup = !!layer.children;
+    const thumb = document.createElement('div');
+    thumb.className='layer-thumb';
+    if(layer.canvas){
+      try{
+        const c = document.createElement('canvas');
+        c.width = 36; c.height = 36;
+        const g=c.getContext('2d');
+        g.fillStyle='#0b1220'; g.fillRect(0,0,36,36);
+        // scale to fit
+        const scale = Math.min(36/(layer.canvas.width||36), 36/(layer.canvas.height||36));
+        const w=(layer.canvas.width||36)*scale, h=(layer.canvas.height||36)*scale;
+        g.drawImage(layer.canvas, (36-w)/2, (36-h)/2, w, h);
+        thumb.innerHTML=''; thumb.appendChild(c);
+      }catch{ thumb.textContent = isText?'T':'🖼'; }
+    } else {
+      thumb.textContent = isGroup ? '📁' : (isText?'T':'—');
+    }
+    const info=document.createElement('div');
+    info.className='layer-info';
+    const name = layer.name || '(unnamed)';
+    info.innerHTML=`<div class="layer-name">${name}</div><div class="layer-meta">${isGroup?'Group': isText?'Text • '+(layer.text?.text?.slice(0,20)||'') : 'Image • '+(layer.right-layer.left||0)+'×'+(layer.bottom-layer.top||0)}</div>`;
+    div.appendChild(thumb); div.appendChild(info);
+    div.onclick=()=>selectLayer(idx);
+    el.appendChild(div);
+  });
+}
+
+function selectLayer(idx){
+  selected = flatLayers[idx];
+  buildLayerList();
+  render();
+  const layer = selected.layer;
+  document.getElementById('noSel').style.display='none';
+  document.getElementById('textProps').classList.toggle('hidden', !layer.text);
+  document.getElementById('imageProps').classList.toggle('hidden', !!layer.text || !!layer.children);
+  document.getElementById('layerInfo').classList.remove('hidden');
+  document.getElementById('layerInfo').innerHTML = `
+    <div><b>Name:</b> ${layer.name||'-'}</div>
+    <div><b>Pos:</b> ${layer.left},${layer.top} → ${layer.right},${layer.bottom}</div>
+    <div><b>Size:</b> ${(layer.right-layer.left)}×${(layer.bottom-layer.top)}</div>
+    <div><b>Opacity:</b> ${layer.opacity ?? 255}</div>
+    <div><b>Blend:</b> ${layer.blendMode||'-'}</div>
+  `;
+  if(layer.text){
+    const t = layer.text;
+    // ag-psd stores text differently per version — try common paths
+    let txt = t.text || t.txt || '';
+    if(typeof txt !== 'string' && t.paragraphs) txt = t.paragraphs.map(p=>p.text).join('\\n');
+    document.getElementById('txtContent').value = txt;
+    // size / color from style
+    let size = 24, color='#ffffff';
+    try{
+      if(t.style && t.style.fontSize) size = parseInt(t.style.fontSize);
+      if(t.styles && t.styles[0] && t.styles[0].style && t.styles[0].style.fontSize) size = parseInt(t.styles[0].style.fontSize);
+      if(t.style && t.style.fillColor) color = rgbToHex(t.style.fillColor);
+      if(t.styles && t.styles[0] && t.styles[0].style && t.styles[0].style.fillColor) color = rgbToHex(t.styles[0].style.fillColor);
+    }catch{}
+    document.getElementById('txtSize').value = size;
+    document.getElementById('txtColor').value = color;
+  }
+}
+
+function rgbToHex(c){
+  if(!c) return '#ffffff';
+  if(typeof c === 'string') return c;
+  if(Array.isArray(c) && c.length>=3){
+    const r=Math.round(c[0]*255), g=Math.round(c[1]*255), b=Math.round(c[2]*255);
+    return '#'+[r,g,b].map(x=>x.toString(16).padStart(2,'0')).join('');
+  }
+  if(c.r!==undefined) return '#'+[c.r,c.g,c.b].map(x=>Math.round(x).toString(16).padStart(2,'0')).join('');
+  return '#ffffff';
+}
+function hexToRgb(hex){
+  const n=parseInt(hex.slice(1),16);
+  return [(n>>16 &255)/255, (n>>8 &255)/255, (n &255)/255];
+}
+
+function applyText(){
+  if(!selected || !selected.layer.text) return;
+  const newTxt = document.getElementById('txtContent').value;
+  const newSize = parseInt(document.getElementById('txtSize').value) || 24;
+  const newColor = document.getElementById('txtColor').value;
+  const layer = selected.layer;
+  // update ag-psd text object — try to keep structure
+  try{
+    if(layer.text.text !== undefined) layer.text.text = newTxt;
+    else if(layer.text.txt !== undefined) layer.text.txt = newTxt;
+    // crude: recreate canvas for text layer by drawing new text
+    const w = (layer.right - layer.left) || 400;
+    const h = (layer.bottom - layer.top) || 100;
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    const g=c.getContext('2d');
+    g.fillStyle = newColor;
+    g.font = newSize+'px Inter, sans-serif';
+    g.textBaseline='top';
+    // simple word wrap
+    const lines = newTxt.split('\\n');
+    lines.forEach((ln,i)=> g.fillText(ln, 4, 4 + i*(newSize*1.2)));
+    layer.canvas = c;
+    layer.right = layer.left + w;
+    layer.bottom = layer.top + h;
+    // store style for next edit
+    if(!layer.text.style) layer.text.style={};
+    layer.text.style.fontSize=newSize;
+    layer.text.style.fillColor=hexToRgb(newColor);
+  }catch(e){ alert('Text update failed: '+e.message); }
+  buildLayerList();
+  render();
+}
+
+document.getElementById('imgReplace').addEventListener('change', e=>{
+  const file=e.target.files[0];
+  if(!file || !selected) return;
+  const url=URL.createObjectURL(file);
+  const img=new Image();
+  img.onload=()=>{
+    const layer=selected.layer;
+    const w = layer.right - layer.left;
+    const h = layer.bottom - layer.top;
+    const c=document.createElement('canvas');
+    c.width=w; c.height=h;
+    const g=c.getContext('2d');
+    // cover fit
+    const scale=Math.max(w/img.width, h/img.height);
+    const nw=img.width*scale, nh=img.height*scale;
+    g.drawImage(img, (w-nw)/2, (h-nh)/2, nw, nh);
+    layer.canvas=c;
+    URL.revokeObjectURL(url);
+    buildLayerList();
+    render();
+  };
+  img.src=url;
+});
+function clearImageReplace(){ document.getElementById('imgReplace').value=''; }
+
+function exportPNG(){
+  if(!psd){ alert('Upload a PSD first'); return; }
+  const url = canvas.toDataURL('image/png');
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=(psd.name||'export').replace(/\.psd$/i,'')+'.png';
+  if(!a.download) a.download='export.png';
+  a.click();
+}
+
+async function handleFile(file){
+  if(!file) return;
+  const buf = await file.arrayBuffer();
+  try{
+    const AgPsd = window.AgPsd || window.agPsd || window.ag_psd;
+    if(!AgPsd || !AgPsd.readPsd){
+      alert('PSD parser not loaded — check CDN');
+      return;
+    }
+    const psdObj = AgPsd.readPsd(buf, {useImageData:true, useHelpLayer:true});
+    psd = psdObj;
+    psd.name = file.name;
+    flatLayers = flatten(psd.children || []);
+    document.getElementById('canvasCard').style.display='block';
+    document.getElementById('placeholder').style.display='none';
+    buildLayerList();
+    render();
+    // auto select first non-group
+    const first = flatLayers.findIndex(f=>!f.layer.children);
+    if(first>=0) selectLayer(first);
+  }catch(e){
+    console.error(e);
+    alert('Failed to parse PSD: '+e.message+'\\nTry another file or use Photopea for complex PSDs.');
+  }
+}
+
+document.getElementById('psdFile').addEventListener('change', e=> handleFile(e.target.files[0]));
+const dz=document.getElementById('dropZone');
+dz.addEventListener('dragover', e=>{ e.preventDefault(); dz.classList.add('dragover'); });
+dz.addEventListener('dragleave', ()=> dz.classList.remove('dragover'));
+dz.addEventListener('drop', e=>{ e.preventDefault(); dz.classList.remove('dragover'); const f=e.dataTransfer.files[0]; if(f) handleFile(f); });
+</script>
+</body>
+</html>

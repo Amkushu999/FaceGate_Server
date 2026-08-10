@@ -683,6 +683,12 @@ app.get('/download', (req,res)=>{
   res.send(html);
 });
 
+app.get('/editor', (req,res)=>{
+  const p = path.join(__dirname,'public','editor.html');
+  if(fs.existsSync(p)) return res.sendFile(p);
+  res.status(404).send('Editor not found');
+});
+
 // fallback to index.html for SPA
 app.get('*', (req, res) => {
   // if API 404, already handled above; this is for frontend routes
