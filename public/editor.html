@@ -137,6 +137,7 @@ let psd = null;
 let currentPsdFile = null;
 let flatLayers = []; // {idx, layer, depth}
 let selected = null;
+let editedLayers = new Set(); // track edited layers to draw on top of full
 const canvas = document.getElementById('psdCanvas');
 const ctx = canvas.getContext('2d');
 
@@ -225,6 +226,18 @@ function render(){
       ctx.textAlign = 'center';
       ctx.fillText('No raster layers — try Photopea for this PSD', w/2, h/2);
     }
+  } else {
+    // Full was drawn — overlay any edited layers on top (so edits show in full)
+    editedLayers.forEach(layer=>{
+      if(!layer.canvas) return;
+      try{
+        const x = layer.left ?? 0;
+        const y = layer.top ?? 0;
+        ctx.globalAlpha = (layer.opacity ?? 255)/255;
+        ctx.drawImage(layer.canvas, x, y);
+        ctx.globalAlpha = 1;
+      }catch(e){ console.warn('edited layer overlay fail', layer.name, e); }
+    });
   }
   // highlight selected (on top of full)
   if(selected && selected.layer && !selected.layer.children){
@@ -374,8 +387,8 @@ function applyText(){
     if(!layer.text.style) layer.text.style={};
     layer.text.style.fontSize=newSize;
     layer.text.style.fillColor=hexToRgb(newColor);
-    // invalidate full composite so next render composites edited layers (full view) — clear both canvas and imageData
-    if(psd){ psd.canvas = null; if(psd.imageData) delete psd.imageData; }
+    // keep full composite and draw this edited layer on top (don't delete psd.canvas)
+    editedLayers.add(layer);
   }catch(e){ alert('Text update failed: '+e.message); }
   buildLayerList();
   render();
@@ -399,7 +412,7 @@ document.getElementById('imgReplace').addEventListener('change', e=>{
     g.drawImage(img, (w-nw)/2, (h-nh)/2, nw, nh);
     layer.canvas=c;
     if(layer.imageData) delete layer.imageData;
-    if(psd){ psd.canvas = null; if(psd.imageData) delete psd.imageData; }
+    editedLayers.add(layer);
     URL.revokeObjectURL(url);
     buildLayerList();
     render();
