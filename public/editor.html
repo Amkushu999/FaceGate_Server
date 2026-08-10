@@ -370,6 +370,7 @@ async function handleFile(file){
     psd.name = file.name;
     flatLayers = flatten(psd.children || []);
     document.getElementById('canvasCard').style.display='block';
+    document.getElementById('canvasLabel').classList.remove('hidden');
     document.getElementById('placeholder').style.display='none';
     buildLayerList();
     render();
