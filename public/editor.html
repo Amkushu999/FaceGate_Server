@@ -81,13 +81,14 @@ a{color:#60a5fa;text-decoration:none}
 
   <!-- Center: Canvas -->
   <div class="canvas-wrap">
+    <div style="width:100%;text-align:center;margin-bottom:10px;color:var(--muted);font-size:11px;letter-spacing:.06em;text-transform:uppercase" id="canvasLabel" class="hidden">Full Preview — all layers together</div>
     <div class="canvas-card" id="canvasCard" style="display:none">
       <canvas id="psdCanvas"></canvas>
     </div>
     <div id="placeholder" style="text-align:center;color:var(--muted);max-width:420px">
       <div style="width:64px;height:64px;margin:0 auto 12px;border-radius:16px;background:#0b1220;border:1px solid var(--border);display:grid;place-items:center;font-size:28px">🖼️</div>
-      <div style="font-weight:700">PSD → PNG Editor</div>
-      <div style="font-size:13px;margin-top:6px;line-height:1.5">Upload a <code>.psd</code> to see layers. Click a layer to edit its text or replace its image, then <b>Export PNG</b>.</div>
+      <div style="font-weight:700">PSD → PNG Editor — Full View</div>
+      <div style="font-size:13px;margin-top:6px;line-height:1.5">Upload a <code>.psd</code> / <code>.psb</code> to see the <b>full image</b> (all layers together). Click a layer on the left to edit its text or image — the center shows the <b>full composite</b>, not just parts. Then <b>Export PNG</b> saves the full.</div>
       <div class="kbd" style="margin-top:10px;display:inline-block">Powered by ag-psd + Canvas</div>
     </div>
   </div>
