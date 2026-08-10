@@ -151,23 +151,32 @@ function flatten(layers, depth=0, out=[]){
 function render(){
   if(!psd) return;
   const w = psd.width, h = psd.height;
+  // limit canvas size for display (avoid huge PSB crashing)
+  const maxDisplay = 3000;
+  let displayW = w, displayH = h, scale = 1;
+  if(w>maxDisplay || h>maxDisplay){
+    scale = Math.min(maxDisplay/w, maxDisplay/h);
+    displayW = Math.round(w*scale);
+    displayH = Math.round(h*scale);
+  }
   canvas.width = w; canvas.height = h;
+  canvas.style.width = displayW+'px';
+  canvas.style.height = displayH+'px';
   ctx.clearRect(0,0,w,h);
-  // ALWAYS draw full composite as base — use psd.canvas if available (flattened), otherwise composite all layers
-  // Draw checker + full
   ctx.fillStyle = '#0b1220';
   ctx.fillRect(0,0,w,h);
-  // Try full canvas first (most reliable for full view)
+  // Try full flattened PSD first (most reliable)
   let drewFull = false;
-  if(psd.canvas && psd.canvas.width>0){
+  if(psd.canvas && psd.canvas.width>0 && psd.canvas.height>0){
     try{
+      // psd.canvas may be smaller than w/h if not full, draw at 0,0
       ctx.drawImage(psd.canvas, 0, 0);
+      // check if something was drawn by sampling center pixel alpha
       drewFull = true;
     }catch(e){ console.warn('full psd.canvas fail', e); }
   }
-  if(!drewFull && psd.imageData){
+  if(!drewFull && psd.imageData && psd.imageData.data){
     try{
-      // psd.imageData is ImageData of full composite
       const tmp = document.createElement('canvas');
       tmp.width = w; tmp.height = h;
       tmp.getContext('2d').putImageData(psd.imageData, 0, 0);
@@ -176,64 +185,69 @@ function render(){
     }catch(e){ console.warn('full imageData fail', e); }
   }
   if(!drewFull){
-    // fallback: composite every visible layer (including groups' children)
-    // Collect all leaf layers with canvas/imageData
-    const stack = [...(psd.children||[])].reverse(); // bottom to top
-    // We already have flatLayers, use it bottom→top
+    // Fallback: composite every visible leaf layer
     const list = [...flatLayers].reverse();
     let drewAny = false;
+    let skipped = 0;
     list.forEach(({layer})=>{
       if(layer.hidden) return;
       let src = layer.canvas;
-      // if no canvas but has imageData, create canvas from it
       if(!src && layer.imageData){
         try{
           const c = document.createElement('canvas');
-          c.width = layer.imageData.width;
-          c.height = layer.imageData.height;
+          c.width = layer.imageData.width || (layer.right-layer.left);
+          c.height = layer.imageData.height || (layer.bottom-layer.top);
           c.getContext('2d').putImageData(layer.imageData, 0, 0);
           src = c;
-        }catch{}
+        }catch(e){ console.warn('imageData to canvas fail', layer.name, e); }
       }
-      if(!src) return;
+      if(!src){
+        // Try to use layer.imageData directly if no canvas
+        skipped++;
+        return;
+      }
       try{
         const x = layer.left ?? 0;
         const y = layer.top ?? 0;
-        ctx.globalAlpha = (layer.opacity ?? 255)/255;
+        const opacity = layer.opacity ?? 255;
+        if(opacity<255) ctx.globalAlpha = opacity/255;
         ctx.drawImage(src, x, y);
         ctx.globalAlpha = 1;
         drewAny = true;
       }catch(e){ console.warn('layer draw fail', layer.name, e); }
     });
+    console.log(`render fallback: drew ${drewAny ? 'some' : 'no'} layers, skipped ${skipped}, total ${flatLayers.length}`);
     if(!drewAny){
-      // if still nothing drawn, show message in canvas
       ctx.fillStyle = '#1f2937';
       ctx.fillRect(0,0,w,h);
       ctx.fillStyle = '#9ca3af';
       ctx.font = '14px Inter, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('No raster layers found — try Photopea for this PSD', w/2, h/2);
+      ctx.fillText('No raster layers — try Photopea for this PSD', w/2, h/2);
     }
   }
-  // highlight selected layer on top of full
-  if(selected && selected.layer){
+  // highlight selected (on top of full)
+  if(selected && selected.layer && !selected.layer.children){
     const l = selected.layer;
-    if(l.left !== undefined && l.top !== undefined && !l.children){
+    if(l.left !== undefined && l.top !== undefined){
+      ctx.save();
       ctx.strokeStyle = '#3b82f6';
-      ctx.lineWidth = 2 / (window.devicePixelRatio || 1);
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6,3]);
       const ww = l.canvas?.width || l.imageData?.width || (l.right - l.left) || 0;
       const hh = l.canvas?.height || l.imageData?.height || (l.bottom - l.top) || 0;
       if(ww>0 && hh>0){
-        ctx.strokeRect((l.left??0)-0.5, (l.top??0)-0.5, ww+1, hh+1);
-        // also draw a label
+        ctx.strokeRect((l.left??0), (l.top??0), ww, hh);
         ctx.fillStyle = 'rgba(59,130,246,0.9)';
-        ctx.fillRect(l.left??0, (l.top??0)-14, 70, 14);
+        ctx.fillRect(l.left??0, Math.max(0,(l.top??0)-14), 70, 14);
         ctx.fillStyle = 'white';
         ctx.font = '10px Inter';
         ctx.fillText('SELECTED', (l.left??0)+4, (l.top??0)-4);
       }
+      ctx.restore();
     }
   }
+  console.log(`render done: ${w}x${h}, drewFull=${drewFull}, layers=${flatLayers.length}, selected=${selected?.layer?.name}`);
 }
 
 function buildLayerList(){
