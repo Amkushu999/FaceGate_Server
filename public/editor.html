@@ -396,26 +396,50 @@ function applyText(){
 
 document.getElementById('imgReplace').addEventListener('change', e=>{
   const file=e.target.files[0];
-  if(!file || !selected) return;
+  if(!file || !selected){
+    alert('Select a layer first, then choose an image');
+    return;
+  }
   const url=URL.createObjectURL(file);
   const img=new Image();
-  img.onload=()=>{
-    const layer=selected.layer;
-    const w = layer.right - layer.left;
-    const h = layer.bottom - layer.top;
-    const c=document.createElement('canvas');
-    c.width=w; c.height=h;
-    const g=c.getContext('2d');
-    // cover fit
-    const scale=Math.max(w/img.width, h/img.height);
-    const nw=img.width*scale, nh=img.height*scale;
-    g.drawImage(img, (w-nw)/2, (h-nh)/2, nw, nh);
-    layer.canvas=c;
-    if(layer.imageData) delete layer.imageData;
-    editedLayers.add(layer);
+  img.onerror=()=>{
+    alert('Failed to load image — try another JPG/PNG');
     URL.revokeObjectURL(url);
-    buildLayerList();
-    render();
+  };
+  img.onload=()=>{
+    try{
+      const layer=selected.layer;
+      const w = layer.right - layer.left;
+      const h = layer.bottom - layer.top;
+      if(w<=0 || h<=0){
+        alert('Layer has no size — cannot replace');
+        URL.revokeObjectURL(url);
+        return;
+      }
+      const c=document.createElement('canvas');
+      c.width=w; c.height=h;
+      const g=c.getContext('2d');
+      g.clearRect(0,0,w,h);
+      // cover fit — ensure image fills the layer bounds
+      const scale=Math.max(w/img.width, h/img.height);
+      const nw=img.width*scale, nh=img.height*scale;
+      const dx=(w-nw)/2, dy=(h-nh)/2;
+      g.drawImage(img, dx, dy, nw, nh);
+      // verify canvas has pixels
+      layer.canvas=c;
+      if(layer.imageData) delete layer.imageData;
+      editedLayers.add(layer);
+      URL.revokeObjectURL(url);
+      // update thumbnail
+      buildLayerList();
+      // force render full with edited overlay
+      render();
+      // also ensure export uses updated canvas
+      console.log(`Replaced ${layer.name} ${w}x${h} with ${file.name} ${img.width}x${img.height} -> canvas ${c.width}x${c.height}`);
+    }catch(err){
+      alert('Replace failed: '+err.message);
+      URL.revokeObjectURL(url);
+    }
   };
   img.src=url;
 });
