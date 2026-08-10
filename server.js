@@ -551,6 +551,21 @@ app.post('/admin/generate', requireAdmin, (req, res) => {
   res.json(out);
 });
 
+app.delete('/admin/apk', requireAdmin, (req, res) => {
+  try {
+    if(!fs.existsSync(UPLOAD_DIR)) return res.json({ ok:true, deleted:[] });
+    const files = fs.readdirSync(UPLOAD_DIR).filter(f=> /\.(apk|zip|apks|xapk)$/i.test(f));
+    const deleted=[];
+    files.forEach(fn=>{
+      try{ fs.unlinkSync(path.join(UPLOAD_DIR, fn)); deleted.push(fn); }catch{}
+    });
+    console.log(`[admin/apk] deleted ${deleted.length} files by ${req.ip}:`, deleted.join(', '));
+    res.json({ ok:true, deleted, count: deleted.length });
+  } catch(e){
+    res.status(500).json({ error:e.message });
+  }
+});
+
 // ─────────────────────────────────────────────
 // UPLOAD / DOWNLOAD — APK distribution for GitHub Actions -> users
 // ─────────────────────────────────────────────

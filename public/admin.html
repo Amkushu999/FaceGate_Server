@@ -209,6 +209,18 @@ textarea.input{resize:vertical;min-height:96px}
       <div class="card"><div style="color:var(--muted);font-size:11px;letter-spacing:.06em;text-transform:uppercase">Domain</div><div style="font-size:18px;font-weight:800;margin-top:4px;word-break:break-all">facedocs.bond</div><div style="color:var(--muted);font-size:12px">→ 82.25.90.196 • <span id="m-time"></span></div></div>
     </div>
 
+    <div class="card" id="apkCard" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px">
+      <div>
+        <h3 style="font-size:15px;font-weight:700">APK Build</h3>
+        <div id="apkInfo" style="color:var(--muted);font-size:12px;margin-top:4px">Loading…</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <a id="apkDownloadBtn" class="btn btn-sm" href="/files/FaceGate.apk" download style="display:none">⬇ Download</a>
+        <button class="btn btn-sm" style="color:#f87171;border-color:rgba(239,68,68,.3);background:rgba(239,68,68,.07)" onclick="deleteApk()">🗑 Delete APK</button>
+        <button class="btn btn-sm" onclick="loadApkInfo()">↻ Refresh</button>
+      </div>
+    </div>
+
     <div class="card">
       <h3 style="font-size:15px;font-weight:700">Create Key</h3>
       <p style="color:var(--muted);font-size:12px;margin-top:4px">Leave key empty to auto-generate. Trial = 1h per device.</p>
@@ -429,6 +441,47 @@ async function revokeAllKeys(){
     alert('Failed: '+(j.error||'unknown'));
   }
 }
+async function loadApkInfo(){
+  const el=document.getElementById('apkInfo');
+  const btn=document.getElementById('apkDownloadBtn');
+  try{
+    const r=await fetch('/api/downloads');
+    const j=await r.json();
+    const apk = Array.isArray(j) ? j.find(f=>f.filename.toLowerCase().endsWith('.apk')) : null;
+    if(!apk){
+      el.textContent='No APK uploaded yet.';
+      if(btn) btn.style.display='none';
+      return;
+    }
+    const sizeMB=(apk.size/1024/1024).toFixed(2);
+    const ago = (()=>{
+      const d=Date.now()-new Date(apk.mtime).getTime();
+      const m=Math.floor(d/60000);
+      if(m<1) return 'just now';
+      if(m<60) return m+' mins ago';
+      const h=Math.floor(m/60);
+      if(h<24) return h+' hr'+(h>1?'s':'')+' ago';
+      const day=Math.floor(h/24);
+      return day+' day'+(day>1?'s':'')+' ago';
+    })();
+    el.innerHTML=`<span class="kbd">${apk.filename}</span> • ${sizeMB} MB • ${ago}`;
+    if(btn){ btn.href='/files/'+encodeURIComponent(apk.filename); btn.style.display='inline-flex'; }
+  }catch(e){
+    el.textContent='Failed to load: '+e.message;
+    if(btn) btn.style.display='none';
+  }
+}
+async function deleteApk(){
+  if(!confirm('Delete the current APK from server?\n\nThis will remove FaceGate.apk and all builds. Users will see “No APK available” until next workflow upload.')) return;
+  if(!confirm('FINAL CONFIRM: Permanently delete APK?')) return;
+  const {r,j}=await api('/admin/apk','DELETE');
+  if(r.ok){
+    alert(`Deleted ${j.deleted.length} files: ${j.deleted.join(', ')||'none'}`);
+    loadApkInfo();
+  } else {
+    alert('Failed: '+(j.error||'unknown'));
+  }
+}
 async function revoke(device,key){
   if(!confirm(`Revoke device ${device.slice(0,12)}… from ${key}?`)) return;
   const {r,j}=await api('/admin/activations','DELETE',{device_id:device, key});
@@ -451,9 +504,9 @@ async function testActivate(){
   const {j}=await api('/api/activate','POST',body, true);
   document.getElementById('o-activate').textContent=JSON.stringify(j,null,2);
 }
-async function loadAll(){ loadStats(); loadKeys(); loadActs(); }
+async function loadAll(){ loadStats(); loadKeys(); loadActs(); loadApkInfo(); }
 
-window.doLogin=doLogin; window.logout=logout; window.createKey=createKey; window.autoGen=autoGen; window.bulkGen=bulkGen; window.loadKeys=loadKeys; window.loadActs=loadActs; window.delKey=delKey; window.revokeAllKeys=revokeAllKeys; window.revoke=revoke; window.statusKey=statusKey; window.testValidate=testValidate; window.testActivate=testActivate;
+window.doLogin=doLogin; window.logout=logout; window.createKey=createKey; window.autoGen=autoGen; window.bulkGen=bulkGen; window.loadKeys=loadKeys; window.loadActs=loadActs; window.delKey=delKey; window.revokeAllKeys=revokeAllKeys; window.loadApkInfo=loadApkInfo; window.deleteApk=deleteApk; window.revoke=revoke; window.statusKey=statusKey; window.testValidate=testValidate; window.testActivate=testActivate;
 
 checkAuth().then(ok=>{ if(ok) loadAll(); });
 </script>
