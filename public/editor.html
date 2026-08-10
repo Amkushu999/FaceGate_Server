@@ -56,7 +56,7 @@ a{color:#60a5fa;text-decoration:none}
   </a>
   <div style="display:flex;gap:8px;align-items:center">
     <label class="btn btn-sm" for="psdFile" style="cursor:pointer">📂 Upload PSD</label>
-    <input id="psdFile" type="file" accept=".psd" class="hidden"/>
+    <input id="psdFile" type="file" accept=".psd,.psb,application/octet-stream,application/x-photoshop,image/vnd.adobe.photoshop,*/*" class="hidden"/>
     <button class="btn btn-primary btn-sm" onclick="exportPNG()">⬇ Export PNG</button>
     <a class="btn btn-sm" href="/download">Download APK</a>
   </div>
@@ -70,8 +70,9 @@ a{color:#60a5fa;text-decoration:none}
       <div id="dropZone" class="drop" onclick="document.getElementById('psdFile').click()">
         <div style="font-size:22px">🎨</div>
         <div style="margin-top:6px;font-weight:600">Drop .psd here</div>
-        <div style="font-size:11px;margin-top:2px">or click to browse</div>
+        <div style="font-size:11px;margin-top:2px">or click to browse — choose <b>Files</b></div>
         <div class="kbd" style="margin:8px auto 0;display:inline-block">.psd → edit → PNG</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:6px;line-height:1.4">On phone: if you only see Photos, tap <b>Browse</b> / <b>Files</b> at the top<br>then go to Downloads/Documents to find your .psd</div>
       </div>
       <div id="layers" style="margin-top:12px"></div>
       <div id="noLayers" style="color:var(--muted);font-size:12px;text-align:center;margin-top:16px;display:none">No PSD loaded.</div>
