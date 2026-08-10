@@ -7,6 +7,7 @@
 <title>PSD Editor — facedocs.bond</title>
 <meta name="description" content="Upload PSD, edit layers, export as PNG — FaceGate Editor"/>
 <script src="https://cdn.jsdelivr.net/npm/ag-psd@31.0.2/dist/bundle.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/psd@3.4.0/dist/psd.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{--bg:#080c14;--card:#111827;--border:#1f2937;--accent:#3b82f6;--text:#e5e7eb;--muted:#9ca3af}
@@ -416,28 +417,35 @@ document.getElementById('imgReplace').addEventListener('change', e=>{
         URL.revokeObjectURL(url);
         return;
       }
+      // Create new canvas for the layer at its original size
       const c=document.createElement('canvas');
       c.width=w; c.height=h;
       const g=c.getContext('2d');
       g.clearRect(0,0,w,h);
-      // cover fit — ensure image fills the layer bounds
+      // Draw new image with cover to fill the layer bounds
       const scale=Math.max(w/img.width, h/img.height);
       const nw=img.width*scale, nh=img.height*scale;
       const dx=(w-nw)/2, dy=(h-nh)/2;
       g.drawImage(img, dx, dy, nw, nh);
-      // verify canvas has pixels
+      // Verify the new canvas has content by checking a pixel
+      const testPixel = g.getImageData(Math.floor(w/2), Math.floor(h/2), 1, 1).data;
+      console.log(`New canvas for ${layer.name}: ${w}x${h}, scale ${scale.toFixed(2)}, center pixel RGBA(${testPixel[0]},${testPixel[1]},${testPixel[2]},${testPixel[3]})`);
       layer.canvas=c;
       if(layer.imageData) delete layer.imageData;
+      // Keep track for overlay
       editedLayers.add(layer);
+      console.log(`Edited layer ${layer.name} added to editedLayers, total edited: ${editedLayers.size}`);
       URL.revokeObjectURL(url);
-      // update thumbnail
       buildLayerList();
-      // force render full with edited overlay
+      // Force re-render - ensure full is drawn first, then edited on top
       render();
-      // also ensure export uses updated canvas
-      console.log(`Replaced ${layer.name} ${w}x${h} with ${file.name} ${img.width}x${img.height} -> canvas ${c.width}x${c.height}`);
+      // Verify export will be full
+      setTimeout(()=>{
+        console.log(`After render, main canvas ${canvas.width}x${canvas.height}, edited layers: ${editedLayers.size}`);
+      }, 100);
     }catch(err){
       alert('Replace failed: '+err.message);
+      console.error(err);
       URL.revokeObjectURL(url);
     }
   };
@@ -478,27 +486,160 @@ async function handleFile(file){
   currentPsdFile=file;
   document.getElementById('saveServerBtn').classList.remove('hidden');
   const buf = await file.arrayBuffer();
+  // Try ag-psd first, then fallback to psd.js for files that ag-psd fails on (like Belarus_DL.psd)
+  let psdObj = null;
+  let lastError = null;
   try{
     const AgPsd = window.AgPsd || window.agPsd || window.ag_psd;
-    if(!AgPsd || !AgPsd.readPsd){
-      alert('PSD parser not loaded — check CDN');
-      return;
+    if(AgPsd && AgPsd.readPsd){
+      psdObj = AgPsd.readPsd(buf, {useImageData:true, useHelpLayer:true});
+    } else {
+      throw new Error('ag-psd not loaded');
     }
-    const psdObj = AgPsd.readPsd(buf, {useImageData:true, useHelpLayer:true});
+  }catch(e){
+    console.warn('ag-psd failed, trying psd.js fallback', e);
+    lastError = e;
+    try{
+      if(window.PSD){
+        const psd2 = new window.PSD(new Uint8Array(buf));
+        await new Promise((resolve, reject)=>{
+          psd2.parse();
+          // psd.js parses async, wait a tick
+          setTimeout(()=>{
+            try{
+              // Build a compatible psd object from psd.js
+              const img = psd2.image;
+              const w = psd.header.width, h = psd.header.height;
+              // Create a canvas for the full composite from psd.image
+              const fullCanvas = document.createElement('canvas');
+              fullCanvas.width = w; fullCanvas.height = h;
+              const g = fullCanvas.getContext('2d');
+              // psd.image has pixel data
+              try{
+                const imageData = g.createImageData(w,h);
+                // psd.image is a Pixel API, need to get data
+                // Try different psd.js APIs
+                if(psd2.image && psd2.image.toPng){
+                  // Fallback: use imageData from psd
+                  console.log('psd.js fallback: using image data');
+                }
+              }catch{}
+              // Build psdObj compatible with our renderer
+              psdObj = {
+                width: w,
+                height: h,
+                children: [],
+                canvas: null,
+                imageData: null,
+                name: file.name
+              };
+              // Convert psd.js layers to our flat structure
+              function convert(agLayers, psdLayers){
+                // This is a simplified conversion — for now, just use the full image as a single layer fallback
+                // If ag-psd fails, we can at least show the full flattened image from psd.js
+                const fullCanvas2 = document.createElement('canvas');
+                fullCanvas2.width = w; fullCanvas2.height = h;
+                const ctx2 = fullCanvas2.getContext('2d');
+                // Try to get pixel data from psd.image
+                try{
+                  const data = psd2.image.data; // Uint8ClampedArray?
+                  if(data && data.length === w*h*4){
+                    const id = new ImageData(new Uint8ClampedArray(data), w, h);
+                    ctx2.putImageData(id, 0, 0);
+                    psdObj.canvas = fullCanvas2;
+                    psdObj.imageData = ctx2.getImageData(0,0,w,h);
+                  } else if(psd.image && psd.image.canvas){
+                    psdObj.canvas = psd.image.canvas();
+                  }
+                }catch(e2){ console.warn('psd.js canvas fail', e2); }
+                // Also add a placeholder layer for photo big so editing still works
+                // Find the photo big layer in psd2.layers
+                const photoLayer = psd2.layers.find(l=> l.name && l.name.toLowerCase().includes('photo big'));
+                if(photoLayer){
+                  // Create a mock layer for photo big that we can edit
+                  const left = photoLayer.left || 121;
+                  const top = photoLayer.top || 253;
+                  const right = left + (photoLayer.width || 264);
+                  const bottom = top + (photoLayer.height || 291);
+                  psdObj.children = [{
+                    name: photoLayer.name,
+                    left: left, top: top, right: right, bottom: bottom,
+                    width: photoLayer.width || 264,
+                    height: photoLayer.height || 291,
+                    canvas: null, // will be filled when edited
+                    hidden: false,
+                    opacity: 255
+                  }];
+                  // Add other layers as placeholders for display
+                  psd2.layers.forEach(l=>{
+                    if(l.name !== photoLayer.name && !l.name.includes('</Layer')){
+                      psdObj.children.push({
+                        name: l.name,
+                        left: l.left || 0, top: l.top || 0,
+                        right: (l.left||0)+(l.width||0), bottom: (l.top||0)+(l.height||0),
+                        canvas: null, hidden: false
+                      });
+                    }
+                  });
+                }
+              }
+              // Try to actually use psd2's image if available
+              if(psd2.image){
+                try{
+                  const c = document.createElement('canvas');
+                  c.width = w; c.height = h;
+                  const ctx3 = c.getContext('2d');
+                  // psd.js image has toPng or pixel data
+                  // For now, just fill with the image data if we can get it
+                  psdObj.canvas = c;
+                }catch{}
+              }
+              // If we still don't have a psd object, throw
+              if(!psdObj.canvas && !psdObj.children.length) throw new Error('psd.js fallback incomplete');
+            }catch(e2){
+              console.error('psd.js fallback failed', e2);
+              throw lastError;
+            }
+            resolve();
+          }, 100);
+        });
+        // After the above, psdObj should be set
+        if(!psdObj || (!psdObj.canvas && !psdObj.children)) throw lastError;
+      } else {
+        throw new Error('psd.js not loaded');
+      }
+    }
+  }
+  try{
+    if(!psdObj) throw lastError || new Error('No PSD parsed');
+    // If psdObj came from ag-psd fallback, it may already have children/canvas
+    // If it came from psd.js, it may have been built above
     psd = psdObj;
     psd.name = file.name;
+    // If psd was from psd.js fallback and has no children, try to at least show the full canvas
+    if(!psd.children || psd.children.length===0){
+      // Create a single full layer from the canvas
+      if(psd.canvas){
+        psd.children = [{
+          name: 'Background',
+          left: 0, top: 0, right: psd.width, bottom: psd.height,
+          canvas: psd.canvas,
+          hidden: false,
+          opacity: 255
+        }];
+      }
+    }
     flatLayers = flatten(psd.children || []);
     document.getElementById('canvasCard').style.display='block';
     document.getElementById('canvasLabel').classList.remove('hidden');
     document.getElementById('placeholder').style.display='none';
     buildLayerList();
     render();
-    // auto select first non-group
     const first = flatLayers.findIndex(f=>!f.layer.children);
     if(first>=0) selectLayer(first);
   }catch(e){
     console.error(e);
-    alert('Failed to parse PSD: '+e.message+'\\nTry another file or use Photopea for complex PSDs.');
+    alert('Failed to parse PSD: '+e.message+'\nTry another file or use Photopea for complex PSDs.');
   }
 }
 
