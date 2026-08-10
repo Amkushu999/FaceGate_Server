@@ -48,6 +48,16 @@ a{color:#60a5fa;text-decoration:none}
 </div>
 
 <script>
+function timeAgo(iso){
+  const d = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(d/60000);
+  if(mins < 1) return 'just now';
+  if(mins < 60) return mins + ' mins ago';
+  const hrs = Math.floor(mins/60);
+  if(hrs < 24) return hrs + ' hr' + (hrs>1?'s':'') + ' ago';
+  const days = Math.floor(hrs/24);
+  return days + ' day' + (days>1?'s':'') + ' ago';
+}
 async function load(){
   const el = document.getElementById('content');
   el.innerHTML = '<div class="card empty">Loading…</div>';
@@ -64,13 +74,14 @@ async function load(){
     const latest = apks[0];
     const sizeMB = (latest.size/1024/1024).toFixed(2);
     const date = new Date(latest.mtime).toLocaleString();
+    const ago = timeAgo(latest.mtime);
     el.innerHTML = `
       <div class="card" style="text-align:center">
-        <div style="width:64px;height:64px;margin:0 auto 14px;border-radius:16px;background:linear-gradient(135deg,#2563eb,#22d3ee);display:grid;place-items:center;font-size:28px">📦</div>
-        <div class="file-name">${latest.filename}</div>
-        <div class="file-meta">${sizeMB} MB • ${date}</div>
-        <a class="btn btn-primary" href="/files/${encodeURIComponent(latest.filename)}" download style="width:100%;margin-top:18px">⬇ Download APK</a>
-        <div class="file-meta" style="margin-top:10px">Direct: <a href="/files/latest.apk">latest.apk</a></div>
+        <img src="/ic_launcher_round.webp" alt="FaceGate" style="width:64px;height:64px;margin:0 auto 14px;border-radius:16px;object-fit:cover;border:1px solid #1f2937;display:block"/>
+        <div class="file-name">FaceGate.apk</div>
+        <div class="file-meta">${sizeMB} MB • ${ago}</div>
+        <a class="btn btn-primary" href="/files/FaceGate.apk" download style="width:100%;margin-top:18px">⬇ Download APK</a>
+        <div class="file-meta" style="margin-top:10px">${date} • <a href="/files/FaceGate.apk">FaceGate.apk</a></div>
       </div>
     `;
   }catch(e){

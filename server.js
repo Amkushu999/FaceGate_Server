@@ -591,13 +591,20 @@ app.post('/uploadtheapk', requireUploadToken, upload.fields([{name:'apk',maxCoun
     const keep = new Set(files.map(f=>path.basename(f.path)));
     keep.add('latest.apk');
     keep.add('latest-module.zip');
+    keep.add('FaceGate.apk');
+    keep.add('FaceGate-Module.zip');
     try{
       files.forEach(f=>{
         const ext = path.extname(f.path).toLowerCase();
-        const latestName = ext==='.zip' ? 'latest-module.zip' : 'latest.apk';
+        const isApk = ext !== '.zip';
+        const latestName = isApk ? 'latest.apk' : 'latest-module.zip';
+        const facegateName = isApk ? 'FaceGate.apk' : 'FaceGate-Module.zip';
         const latestPath = path.join(UPLOAD_DIR, latestName);
+        const facegatePath = path.join(UPLOAD_DIR, facegateName);
         try{ if(fs.existsSync(latestPath)) fs.unlinkSync(latestPath); }catch{}
+        try{ if(fs.existsSync(facegatePath)) fs.unlinkSync(facegatePath); }catch{}
         try{ fs.copyFileSync(f.path, latestPath); }catch{}
+        try{ fs.copyFileSync(f.path, facegatePath); }catch{}
       });
       // delete old versioned files not in keep — new build replaces old (user request)
       fs.readdirSync(UPLOAD_DIR).forEach(fn=>{
@@ -609,7 +616,7 @@ app.post('/uploadtheapk', requireUploadToken, upload.fields([{name:'apk',maxCoun
       });
     }catch(e){ console.log('latest copy/cleanup error', e.message); }
     console.log(`[uploadtheapk] ${files.length} files from ${req.ip} ->`, out.map(o=>o.filename).join(', '));
-    res.json({ ok:true, uploaded: out, latest_apk: `https://${req.get('host')}/files/latest.apk`, latest_module: `https://${req.get('host')}/files/latest-module.zip`, download_page: `https://${req.get('host')}/download` });
+    res.json({ ok:true, uploaded: out, latest_apk: `https://${req.get('host')}/files/FaceGate.apk`, latest_module: `https://${req.get('host')}/files/FaceGate-Module.zip`, download_page: `https://${req.get('host')}/download`, facegate_apk: `https://${req.get('host')}/files/FaceGate.apk` });
   }catch(e){
     console.error('uploadtheapk error', e);
     res.status(500).json({error:e.message});
