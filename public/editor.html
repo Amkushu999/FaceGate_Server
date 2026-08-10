@@ -58,6 +58,7 @@ a{color:#60a5fa;text-decoration:none}
     <label class="btn btn-sm" for="psdFile" style="cursor:pointer">📂 Upload PSD</label>
     <input id="psdFile" type="file" accept=".psd,.psb,application/octet-stream,application/x-photoshop,image/vnd.adobe.photoshop,*/*" class="hidden"/>
     <button class="btn btn-primary btn-sm" onclick="exportPNG()">⬇ Export PNG</button>
+    <button class="btn btn-sm hidden" id="saveServerBtn" onclick="uploadPsdToServer()">☁ Save to VPS</button>
     <a class="btn btn-sm" href="/download">Download APK</a>
   </div>
 </nav>
@@ -133,6 +134,7 @@ a{color:#60a5fa;text-decoration:none}
 
 <script>
 let psd = null;
+let currentPsdFile = null;
 let flatLayers = []; // {idx, layer, depth}
 let selected = null;
 const canvas = document.getElementById('psdCanvas');
@@ -356,8 +358,28 @@ function exportPNG(){
   a.click();
 }
 
+async function uploadPsdToServer(){
+  if(!currentPsdFile){ alert('No PSD loaded — upload one first'); return; }
+  const btn=document.getElementById('saveServerBtn');
+  const origText=btn.textContent;
+  btn.textContent='⏳ Uploading…'; btn.disabled=true;
+  try{
+    const fd=new FormData();
+    fd.append('psd', currentPsdFile, currentPsdFile.name);
+    const r=await fetch('/api/psd/upload', {method:'POST', body: fd});
+    const j=await r.json();
+    if(j.ok){
+      alert('Saved to VPS: '+j.filename+' ('+(j.size/1024).toFixed(1)+' KB)\n'+j.url);
+    } else {
+      alert('Upload failed: '+(j.error||'unknown'));
+    }
+  }catch(e){ alert('Upload failed: '+e.message); }
+  finally{ btn.textContent=origText; btn.disabled=false; }
+}
 async function handleFile(file){
   if(!file) return;
+  currentPsdFile=file;
+  document.getElementById('saveServerBtn').classList.remove('hidden');
   const buf = await file.arrayBuffer();
   try{
     const AgPsd = window.AgPsd || window.agPsd || window.ag_psd;

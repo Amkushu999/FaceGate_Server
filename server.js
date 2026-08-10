@@ -25,6 +25,8 @@ const ADMIN_PASS = process.env.ADMIN_PASS || '87877878@Kk##';
 const UPLOAD_TOKEN = process.env.UPLOAD_TOKEN || process.env.UPLOAD_SECRET || 'facegate_upload_2024_87877878_4f9a1c';
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
 try { if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true }); } catch {}
+const PSD_DIR = path.join(UPLOAD_DIR, 'psd');
+try { if (!fs.existsSync(PSD_DIR)) fs.mkdirSync(PSD_DIR, { recursive: true }); } catch {}
 // rate limit for brute force login — 10/hr lock
 const loginLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
@@ -644,6 +646,66 @@ app.post('/upload', requireUploadToken, upload.any(), (req,res)=>{
   if(files.length===0) return res.status(400).json({error:'No file'});
   const out = files.map(f=>({ filename:path.basename(f.path), original:f.originalname, size:fs.statSync(f.path).size, url:`https://${req.get('host')}/files/${encodeURIComponent(path.basename(f.path))}`}));
   res.json({ok:true, uploaded:out});
+});
+
+// ── PSD upload — save .psd/.psb to VPS in uploads/psd (for editor) ──
+const psdStorage = multer.diskStorage({
+  destination: (req,file,cb)=> cb(null, PSD_DIR),
+  filename: (req,file,cb)=>{
+    const orig = file.originalname || 'upload.psd';
+    const safe = path.basename(orig).replace(/[^a-zA-Z0-9._-]/g,'_') || 'file.psd';
+    // if exists, add timestamp
+    let out = safe;
+    if(fs.existsSync(path.join(PSD_DIR, safe))){
+      const ext = path.extname(safe);
+      const base = path.basename(safe, ext);
+      const stamp = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
+      out = `${base}_${stamp}${ext}`;
+    }
+    cb(null, out);
+  }
+});
+const psdUpload = multer({
+  storage: psdStorage,
+  limits: { fileSize: 500*1024*1024 },
+  fileFilter: (req,file,cb)=>{
+    const ok = /\.(psd|psb)$/i.test(file.originalname||'');
+    if(!ok) return cb(new Error('Only PSD/PSB allowed'));
+    cb(null,true);
+  }
+});
+app.post('/api/psd/upload', psdUpload.single('psd'), (req,res)=>{
+  try{
+    if(!req.file) return res.status(400).json({error:'No PSD — send field psd'});
+    const stat = fs.statSync(req.file.path);
+    const fn = path.basename(req.file.path);
+    res.json({ok:true, filename: fn, original: req.file.originalname, size: stat.size, url: `https://${req.get('host')}/psd/${encodeURIComponent(fn)}`});
+  }catch(e){ res.status(500).json({error:e.message}); }
+});
+app.post('/upload/psd', psdUpload.single('psd'), (req,res)=>{
+  try{
+    if(!req.file) return res.status(400).json({error:'No PSD'});
+    const stat = fs.statSync(req.file.path);
+    const fn = path.basename(req.file.path);
+    res.json({ok:true, filename: fn, size: stat.size, url: `https://${req.get('host')}/psd/${encodeURIComponent(fn)}`});
+  }catch(e){ res.status(500).json({error:e.message}); }
+});
+app.get('/api/psd/list', (req,res)=>{
+  try{
+    if(!fs.existsSync(PSD_DIR)) return res.json([]);
+    const files = fs.readdirSync(PSD_DIR).filter(f=> /\.(psd|psb)$/i.test(f)).map(f=>{
+      const full=path.join(PSD_DIR,f);
+      const stat=fs.statSync(full);
+      return {filename:f, size:stat.size, mtime:stat.mtime.toISOString(), url:`https://${req.get('host')}/psd/${encodeURIComponent(f)}`};
+    }).sort((a,b)=> new Date(b.mtime)-new Date(a.mtime));
+    res.json(files);
+  }catch(e){ res.status(500).json({error:e.message}); }
+});
+app.get('/psd/:filename', (req,res)=>{
+  const fn = path.basename(req.params.filename);
+  const full = path.join(PSD_DIR, fn);
+  if(!fs.existsSync(full)) return res.status(404).send('Not found');
+  res.sendFile(full);
 });
 
 // list available downloads (public)
