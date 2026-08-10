@@ -14,6 +14,7 @@ const path = require('path');
 const crypto = require('crypto');
 const fs = require('fs');
 const multer = require('multer');
+const rateLimit = require('express-rate-limit');
 const db = require('./db');
 const { buildEnvelope } = require('./envelope');
 
@@ -24,6 +25,15 @@ const ADMIN_PASS = process.env.ADMIN_PASS || '87877878@Kk##';
 const UPLOAD_TOKEN = process.env.UPLOAD_TOKEN || process.env.UPLOAD_SECRET || 'facegate_upload_2024_87877878_4f9a1c';
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
 try { if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true }); } catch {}
+// rate limit for brute force login — 10/hr lock
+const loginLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 10,
+  message: { ok: false, message: "Too many login attempts — try again in 1 hour" },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // multer storage for APKs
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOAD_DIR),
@@ -437,7 +447,7 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-app.post('/admin/login', (req, res) => {
+app.post('/admin/login', loginLimiter, (req, res) => {
   const { user, pass, admin_user, admin_pass } = req.body || {};
   const u = user || admin_user;
   const p = pass || admin_pass;
