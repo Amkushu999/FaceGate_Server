@@ -472,7 +472,7 @@ document.getElementById('imgReplace').addEventListener('change', e=>{
       const g=c.getContext('2d');
       g.fillStyle='#ffffff';
       g.fillRect(0,0,w,h);
-      const scale=Math.max(w/img.width, h/img.height);
+      const scale=Math.min(w/img.width, h/img.height);
       const nw=img.width*scale, nh=img.height*scale;
       const dx=(w-nw)/2, dy=(h-nh)/2;
       g.drawImage(img, dx, dy, nw, nh);
