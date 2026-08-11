@@ -291,9 +291,67 @@ function render(forExport){
             console.error('text bg overlay fail', e2);
             ctx.drawImage(layer.canvas, lx, ly);
           }
-        } else {
-          // Image replace: just draw on top of composite
-          ctx.drawImage(layer.canvas, lx, ly);
+        } else if(layer._editImg) {
+          // Image replace: properly handle blend modes
+          const lw = (layer.right - layer.left) || layer.canvas.width;
+          const lh = (layer.bottom - layer.top) || layer.canvas.height;
+
+          if(layer._originalCanvas && (layer.blendMode === 'multiply' || layer.blendMode === 'screen')){
+            // For multiply/screen blend: undo original blend, then apply with replacement
+            try{
+              const compData = ctx.getImageData(lx, ly, lw, lh);
+              const origData = layer._originalCanvas.getContext('2d').getImageData(0, 0, lw, lh);
+              const replData = layer.canvas.getContext('2d').getImageData(0, 0, lw, lh);
+              const isMultiply = layer.blendMode === 'multiply';
+
+              for(let i = 0; i < compData.data.length; i += 4){
+                const origA = origData.data[i+3] / 255;
+                if(origA < 0.01) continue; // skip where original was transparent
+
+                const oR = origData.data[i] / 255;
+                const oG = origData.data[i+1] / 255;
+                const oB = origData.data[i+2] / 255;
+
+                let cR = compData.data[i], cG = compData.data[i+1], cB = compData.data[i+2];
+
+                // Reconstruct background by undoing the blend
+                let bgR, bgG, bgB;
+                if(isMultiply){
+                  bgR = oR > 0.005 ? cR / oR : cR;
+                  bgG = oG > 0.005 ? cG / oG : cG;
+                  bgB = oB > 0.005 ? cB / oB : cB;
+                } else { // screen: result = bg + fg - bg*fg => bg = (result - fg) / (1 - fg)
+                  bgR = (1-oR) > 0.005 ? (cR - oR*255) / (1-oR) : cR;
+                  bgG = (1-oG) > 0.005 ? (cG - oG*255) / (1-oG) : cG;
+                  bgB = (1-oB) > 0.005 ? (cB - oB*255) / (1-oB) : cB;
+                }
+
+                const rR = replData.data[i] / 255;
+                const rG = replData.data[i+1] / 255;
+                const rB = replData.data[i+2] / 255;
+                const rA = replData.data[i+3] / 255;
+
+                // Apply blend with replacement, alpha-composite with original composite
+                let nR, nG, nB;
+                if(isMultiply){
+                  nR = bgR * rR; nG = bgG * rG; nB = bgB * rB;
+                } else {
+                  nR = bgR + rR*255 - bgR*rR; nG = bgG + rG*255 - bgG*rG; nB = bgB + rB*255 - bgB*rB;
+                }
+
+                compData.data[i]   = Math.min(255, Math.max(0, Math.round(nR * rA + cR * (1-rA))));
+                compData.data[i+1] = Math.min(255, Math.max(0, Math.round(nG * rA + cG * (1-rA))));
+                compData.data[i+2] = Math.min(255, Math.max(0, Math.round(nB * rA + cB * (1-rA))));
+              }
+              ctx.putImageData(compData, lx, ly);
+            }catch(e3){
+              console.error('blend mode overlay fail, falling back to simple overlay', e3);
+              ctx.drawImage(layer.canvas, lx, ly);
+            }
+          } else {
+            // Normal blend or no original canvas: just draw replacement on top
+            ctx.drawImage(layer.canvas, lx, ly);
+          }
         }
       }catch(e){ console.error('edit overlay fail', layer.name, e); }
     });
@@ -452,7 +510,66 @@ function applyText(){
   render();
 }
 
-function clearImageReplace(){ document.getElementById('imgReplace').value=''; }
+function clearImageReplace(){
+  document.getElementById('imgReplace').value='';
+  if(!selected) return;
+  const layer = selected.layer;
+  // Restore original canvas if it was replaced
+  if(layer._originalCanvas && editedLayers.has(layer)){
+    layer.canvas = layer._originalCanvas;
+    delete layer._originalCanvas;
+    delete layer._editImg;
+    editedLayers.delete(layer);
+    buildLayerList();
+    render();
+  }
+}
+
+/* ─── Image replacement handler ─── */
+document.getElementById('imgReplace').addEventListener('change', function(e){
+  const file = e.target.files && e.target.files[0];
+  if(!file || !selected) return;
+  const layer = selected.layer;
+  if(layer.children) return; // skip groups
+
+  console.log('imgReplace:', file.name, file.size, 'for layer:', layer.name);
+
+  // Save original canvas before replacing
+  if(!layer._originalCanvas && layer.canvas) layer._originalCanvas = layer.canvas;
+
+  const lw = (layer.right - layer.left) || 200;
+  const lh = (layer.bottom - layer.top) || 200;
+
+  // Read the image file
+  const reader = new FileReader();
+  reader.onload = function(ev){
+    const img = new Image();
+    img.onload = function(){
+      // Create replacement canvas with cover scale (fill layer area)
+      const c = document.createElement('canvas');
+      c.width = lw; c.height = lh;
+      const g = c.getContext('2d');
+
+      // Cover scale: fill the layer area completely, cropping excess
+      const scale = Math.max(lw / img.width, lh / img.height);
+      const sw = img.width * scale;
+      const sh = img.height * scale;
+      g.drawImage(img, (lw - sw) / 2, (lh - sh) / 2, sw, sh);
+
+      layer.canvas = c;
+      if(layer.imageData) delete layer.imageData;
+      layer._editImg = true; // flag: this is an image replacement
+      editedLayers.add(layer);
+      console.log('Image replaced for layer:', layer.name, lw+'x'+lh);
+      buildLayerList();
+      render();
+    };
+    img.onerror = function(){ alert('Failed to load image. Try a different file.'); };
+    img.src = ev.target.result;
+  };
+  reader.onerror = function(){ alert('Failed to read file.'); };
+  reader.readAsDataURL(file);
+});
 
 function exportPNG(){
   if(!psd){ alert('Upload a PSD first'); return; }
