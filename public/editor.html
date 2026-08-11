@@ -208,6 +208,7 @@ function render(){
   // If there are edited layers, we MUST re-composite per-layer so edits
   // REPLACE original pixels instead of drawing on top of them.
   const hasEdits = editedLayers.size > 0;
+  let drewFull = false;
 
   if(hasEdits){
     // ── Per-layer compositing: draw each leaf layer, using edited version for edited layers ──
@@ -249,7 +250,6 @@ function render(){
     }
   } else {
     // No edits — use fast cached composite
-    let drewFull = false;
     if(psd.canvas && psd.canvas.width>0 && psd.canvas.height>0){
       try{
         ctx.drawImage(psd.canvas, 0, 0);
