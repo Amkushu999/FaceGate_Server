@@ -205,20 +205,24 @@ function render(){
   ctx.fillStyle = '#0b1220';
   ctx.fillRect(0,0,w,h);
 
-  // If there are edited layers, we MUST re-composite per-layer so edits
-  // REPLACE original pixels instead of drawing on top of them.
-  const hasEdits = editedLayers.size > 0;
+  // 1) Draw the full composite (all original layers)
   let drewFull = false;
-
-  if(hasEdits){
-    // ── Per-layer compositing: draw each leaf layer, using edited version for edited layers ──
-    const list = [...flatLayers].reverse(); // bottom-to-top
+  if(psd.canvas && psd.canvas.width>0 && psd.canvas.height>0){
+    try{ ctx.drawImage(psd.canvas, 0, 0); drewFull = true; }catch(e){}
+  }
+  if(!drewFull && psd.imageData && psd.imageData.data){
+    try{
+      const tmp = document.createElement('canvas');
+      tmp.width = w; tmp.height = h;
+      tmp.getContext('2d').putImageData(psd.imageData, 0, 0);
+      ctx.drawImage(tmp, 0, 0); drewFull = true;
+    }catch(e){}
+  }
+  if(!drewFull){
+    const list = [...flatLayers].reverse();
     let drewAny = false;
-    let skipped = 0;
     list.forEach(({layer})=>{
       if(layer.hidden) return;
-      // For edited layers, use their .canvas (the replacement)
-      // For non-edited layers, use original .canvas or .imageData
       let src = layer.canvas;
       if(!src && layer.imageData){
         try{
@@ -227,81 +231,61 @@ function render(){
           c.height = layer.imageData.height || (layer.bottom-layer.top);
           c.getContext('2d').putImageData(layer.imageData, 0, 0);
           src = c;
-        }catch(e){ console.warn('imageData to canvas fail', layer.name, e); }
+        }catch{}
       }
-      if(!src){ skipped++; return; }
+      if(!src) return;
       try{
-        const x = layer.left ?? 0;
-        const y = layer.top ?? 0;
-        const opacity = layer.opacity ?? 255;
-        if(opacity<255) ctx.globalAlpha = opacity/255;
+        const x = layer.left ?? 0, y = layer.top ?? 0;
+        ctx.globalAlpha = (layer.opacity ?? 255)/255;
         ctx.drawImage(src, x, y);
-        ctx.globalAlpha = 1;
-        drewAny = true;
-      }catch(e){ console.warn('layer draw fail', layer.name, e); }
+        ctx.globalAlpha = 1; drewAny = true;
+      }catch{}
     });
     if(!drewAny){
-      ctx.fillStyle = '#1f2937';
-      ctx.fillRect(0,0,w,h);
-      ctx.fillStyle = '#9ca3af';
-      ctx.font = '14px Inter, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('No raster layers — try Photopea for this PSD', w/2, h/2);
+      ctx.fillStyle = '#1f2937'; ctx.fillRect(0,0,w,h);
+      ctx.fillStyle = '#9ca3af'; ctx.font = '14px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('No raster layers — try Photopea', w/2, h/2);
     }
-  } else {
-    // No edits — use fast cached composite
-    if(psd.canvas && psd.canvas.width>0 && psd.canvas.height>0){
+  }
+
+  // 2) Overlay edited layers: clear their old region, re-draw layers behind, draw new content
+  if(editedLayers.size > 0){
+    editedLayers.forEach(layer=>{
+      if(!layer.canvas) return;
       try{
-        ctx.drawImage(psd.canvas, 0, 0);
-        drewFull = true;
-      }catch(e){ console.warn('full psd.canvas fail', e); }
-    }
-    if(!drewFull && psd.imageData && psd.imageData.data){
-      try{
-        const tmp = document.createElement('canvas');
-        tmp.width = w; tmp.height = h;
-        tmp.getContext('2d').putImageData(psd.imageData, 0, 0);
-        ctx.drawImage(tmp, 0, 0);
-        drewFull = true;
-      }catch(e){ console.warn('full imageData fail', e); }
-    }
-    if(!drewFull){
-      // Fallback: composite every visible leaf layer
-      const list = [...flatLayers].reverse();
-      let drewAny = false;
-      let skipped = 0;
-      list.forEach(({layer})=>{
-        if(layer.hidden) return;
-        let src = layer.canvas;
-        if(!src && layer.imageData){
-          try{
-            const c = document.createElement('canvas');
-            c.width = layer.imageData.width || (layer.right-layer.left);
-            c.height = layer.imageData.height || (layer.bottom-layer.top);
-            c.getContext('2d').putImageData(layer.imageData, 0, 0);
-            src = c;
-          }catch(e){ console.warn('imageData to canvas fail', layer.name, e); }
-        }
-        if(!src){ skipped++; return; }
-        try{
-          const x = layer.left ?? 0;
-          const y = layer.top ?? 0;
-          const opacity = layer.opacity ?? 255;
-          if(opacity<255) ctx.globalAlpha = opacity/255;
-          ctx.drawImage(src, x, y);
+        const x = layer.left ?? 0, y = layer.top ?? 0;
+        const lw = layer.right - layer.left, lh = layer.bottom - layer.top;
+        // Clear the edited layer's region
+        ctx.clearRect(x, y, lw, lh);
+        // Re-draw all non-edited layers that are BEHIND this one (to restore background)
+        const myIdx = flatLayers.findIndex(f=>f.layer===layer);
+        const behind = flatLayers.slice(myIdx + 1); // lower indices = higher in stack = drawn first
+        behind.forEach(({layer:bl})=>{
+          if(bl.hidden || editedLayers.has(bl)) return;
+          let src = bl.canvas;
+          if(!src && bl.imageData){
+            try{
+              const c = document.createElement('canvas');
+              c.width = bl.imageData.width || (bl.right-bl.left);
+              c.height = bl.imageData.height || (bl.bottom-bl.top);
+              c.getContext('2d').putImageData(bl.imageData, 0, 0);
+              src = c;
+            }catch{}
+          }
+          if(!src) return;
+          ctx.save();
+          ctx.beginPath(); ctx.rect(x, y, lw, lh); ctx.clip();
+          ctx.globalAlpha = (bl.opacity ?? 255)/255;
+          ctx.drawImage(src, bl.left ?? 0, bl.top ?? 0);
           ctx.globalAlpha = 1;
-          drewAny = true;
-        }catch(e){ console.warn('layer draw fail', layer.name, e); }
-      });
-      if(!drewAny){
-        ctx.fillStyle = '#1f2937';
-        ctx.fillRect(0,0,w,h);
-        ctx.fillStyle = '#9ca3af';
-        ctx.font = '14px Inter, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('No raster layers — try Photopea for this PSD', w/2, h/2);
-      }
-    }
+          ctx.restore();
+        });
+        // Draw the edited layer on top
+        ctx.globalAlpha = (layer.opacity ?? 255)/255;
+        ctx.drawImage(layer.canvas, x, y);
+        ctx.globalAlpha = 1;
+      }catch(e){ console.warn('edited overlay fail', layer.name, e); }
+    });
   }
   // highlight selected (on top of full)
   if(selected && selected.layer && !selected.layer.children){
