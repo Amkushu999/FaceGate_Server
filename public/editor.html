@@ -187,7 +187,7 @@ function flatten(layers, depth=0, out=[]){
   return out;
 }
 
-function render(){
+function render(forExport){
   if(!psd) return;
   const w = psd.width, h = psd.height;
   // limit canvas size for display (avoid huge PSB crashing)
@@ -299,7 +299,8 @@ function render(){
     });
   }
 
-  // highlight selected (on top of full)
+  // highlight selected (on top of full) — skip when exporting
+  if(!forExport) {
   if(selected && selected.layer && !selected.layer.children){
     const l = selected.layer;
     if(l.left !== undefined && l.top !== undefined){
@@ -320,6 +321,7 @@ function render(){
       ctx.restore();
     }
   }
+  } // end if(!forExport)
   console.log(`render done: ${w}x${h}, drewFull=${drewFull}, psd.canvas=${!!psd?.canvas}, psd.imageData=${!!psd?.imageData}, edited=${editedLayers.size}, selected=${selected?.layer?.name}`);
 }
 
@@ -454,12 +456,16 @@ function clearImageReplace(){ document.getElementById('imgReplace').value=''; }
 
 function exportPNG(){
   if(!psd){ alert('Upload a PSD first'); return; }
+  // Render without selection highlight for clean export
+  render(true);
   const url = canvas.toDataURL('image/png');
   const a=document.createElement('a');
   a.href=url;
   a.download=(psd.name||'export').replace(/\.psd$/i,'')+'.png';
   if(!a.download) a.download='export.png';
   a.click();
+  // Re-render with selection highlight
+  render();
 }
 
 async function uploadPsdToServer(){
