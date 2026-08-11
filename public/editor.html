@@ -263,7 +263,7 @@ function render(){
       try{
         const lx = layer.left ?? 0, ly = layer.top ?? 0;
 
-        if(layer._originalCanvas && layer.text){
+        if(false && layer._originalCanvas && layer.text){
           // TEXT edit: pixel replacement to erase old text, show new
           const lw = (layer.right - layer.left) || layer.canvas.width;
           const lh = (layer.bottom - layer.top) || layer.canvas.height;
@@ -426,40 +426,47 @@ function applyText(){
   const newColor = document.getElementById('txtColor').value;
   const layer = selected.layer;
   try{
-    // Update the text data
     if(layer.text.text !== undefined) layer.text.text = newTxt;
     else if(layer.text.txt !== undefined) layer.text.txt = newTxt;
 
-    // Get layer bounds
     const lx = layer.left ?? 0, ly = layer.top ?? 0;
     const lw = (layer.right - layer.left) || 200;
     const lh = (layer.bottom - layer.top) || 50;
 
-    // Create canvas for the new text (transparent background)
-    const c = document.createElement('canvas');
-    c.width = lw;
-    c.height = lh;
-    const g = c.getContext('2d');
+    // Sample background color from composite where original text was transparent
+    let bgR = 255, bgG = 255, bgB = 255;
+    try{
+      if(psd.canvas){
+        const compData = psd.canvas.getContext('2d').getImageData(lx, ly, lw, lh).data;
+        const origD = layer.canvas ? layer.canvas.getContext('2d').getImageData(0, 0, lw, lh).data : null;
+        let r=0, g=0, b=0, n=0;
+        for(let i = 0; i < compData.length; i += 4){
+          const isBg = !origD || origD[i+3] < 10;
+          if(isBg){ r += compData[i]; g += compData[i+1]; b += compData[i+2]; n++; }
+        }
+        if(n > 0){ bgR = Math.round(r/n); bgG = Math.round(g/n); bgB = Math.round(b/n); }
+      }
+    }catch(e){ console.warn('bg sample fail', e); }
 
-    // Draw text (no background fill - we'll blend properly in render)
+    // Draw text on sampled background (fully opaque canvas)
+    const c = document.createElement('canvas');
+    c.width = lw; c.height = lh;
+    const g = c.getContext('2d');
+    g.fillStyle = 'rgb('+bgR+','+bgG+','+bgB+')';
+    g.fillRect(0, 0, lw, lh);
     g.fillStyle = newColor;
     g.font = newSize + 'px Inter, sans-serif';
     g.textBaseline = 'top';
     const lines = newTxt.split('\n');
     lines.forEach((ln, i) => g.fillText(ln, 4, 4 + i * (newSize * 1.3)));
 
-    // Save original and set new canvas
     if(!layer._originalCanvas && layer.canvas) layer._originalCanvas = layer.canvas;
     layer.canvas = c;
     if(layer.imageData) delete layer.imageData;
-
-    // Update style
     if(!layer.text.style) layer.text.style = {};
     layer.text.style.fontSize = newSize;
     layer.text.style.fillColor = hexToRgb(newColor);
-
     editedLayers.add(layer);
-    console.log('applyText:', layer.name, 'canvas:', c.width, 'x', c.height, 'at', lx, ly);
   }catch(e){ alert('Text update failed: ' + e.message); console.error(e); }
   buildLayerList();
   render();
