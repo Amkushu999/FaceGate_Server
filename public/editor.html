@@ -248,42 +248,24 @@ function render(){
     }
   }
 
-  // 2) Overlay edited layers: clear their old region, re-draw layers behind, draw new content
+  // 2) Overlay edited layers directly on top of the full composite
+  // The edit covers the same bounds as the original layer, so it visually replaces it
   if(editedLayers.size > 0){
     editedLayers.forEach(layer=>{
       if(!layer.canvas) return;
       try{
         const x = layer.left ?? 0, y = layer.top ?? 0;
         const lw = layer.right - layer.left, lh = layer.bottom - layer.top;
-        // Clear the edited layer's region
-        ctx.clearRect(x, y, lw, lh);
-        // Re-draw all non-edited layers that are BEHIND this one (to restore background)
-        const myIdx = flatLayers.findIndex(f=>f.layer===layer);
-        const behind = flatLayers.slice(myIdx + 1); // lower indices = higher in stack = drawn first
-        behind.forEach(({layer:bl})=>{
-          if(bl.hidden || editedLayers.has(bl)) return;
-          let src = bl.canvas;
-          if(!src && bl.imageData){
-            try{
-              const c = document.createElement('canvas');
-              c.width = bl.imageData.width || (bl.right-bl.left);
-              c.height = bl.imageData.height || (bl.bottom-bl.top);
-              c.getContext('2d').putImageData(bl.imageData, 0, 0);
-              src = c;
-            }catch{}
-          }
-          if(!src) return;
-          ctx.save();
-          ctx.beginPath(); ctx.rect(x, y, lw, lh); ctx.clip();
-          ctx.globalAlpha = (bl.opacity ?? 255)/255;
-          ctx.drawImage(src, bl.left ?? 0, bl.top ?? 0);
-          ctx.globalAlpha = 1;
-          ctx.restore();
-        });
-        // Draw the edited layer on top
+        // Clear only the edited region and fill with white (common PSD background)
+        // Then draw the new image — this replaces the old layer content
+        ctx.save();
+        ctx.beginPath(); ctx.rect(x, y, lw, lh); ctx.clip();
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(x, y, lw, lh);
         ctx.globalAlpha = (layer.opacity ?? 255)/255;
-        ctx.drawImage(layer.canvas, x, y);
+        ctx.drawImage(layer.canvas, 0, 0, layer.canvas.width, layer.canvas.height, x, y, lw, lh);
         ctx.globalAlpha = 1;
+        ctx.restore();
       }catch(e){ console.warn('edited overlay fail', layer.name, e); }
     });
   }
