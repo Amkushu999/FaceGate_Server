@@ -248,25 +248,26 @@ function render(){
     }
   }
 
-  // 2) Overlay edited layers directly on top of the full composite
-  // The edit covers the same bounds as the original layer, so it visually replaces it
+  // 2) Overlay edited layers: stamp the replacement image directly on the composite
   if(editedLayers.size > 0){
     editedLayers.forEach(layer=>{
       if(!layer.canvas) return;
       try{
         const x = layer.left ?? 0, y = layer.top ?? 0;
         const lw = layer.right - layer.left, lh = layer.bottom - layer.top;
-        // Clear only the edited region and fill with white (common PSD background)
-        // Then draw the new image — this replaces the old layer content
-        ctx.save();
-        ctx.beginPath(); ctx.rect(x, y, lw, lh); ctx.clip();
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(x, y, lw, lh);
-        ctx.globalAlpha = (layer.opacity ?? 255)/255;
-        ctx.drawImage(layer.canvas, 0, 0, layer.canvas.width, layer.canvas.height, x, y, lw, lh);
+        const opacity = layer.opacity ?? 255;
+        // Debug: verify canvas has content
+        try{
+          const px = layer.canvas.getContext('2d').getImageData(
+            Math.floor(layer.canvas.width/2), Math.floor(layer.canvas.height/2), 1, 1).data;
+          console.log('EDIT OVERLAY:', layer.name, 'canvas:', layer.canvas.width, 'x', layer.canvas.height,
+            'dest:', x, y, lw, lh, 'opacity:', opacity, 'center pixel:', px[0], px[1], px[2], px[3]);
+        }catch(e2){ console.warn('edit pixel check fail', e2); }
+        // Draw the replacement image at the layer's position
+        if(opacity < 255) ctx.globalAlpha = opacity/255;
+        ctx.drawImage(layer.canvas, x, y);
         ctx.globalAlpha = 1;
-        ctx.restore();
-      }catch(e){ console.warn('edited overlay fail', layer.name, e); }
+      }catch(e){ console.error('edited overlay fail', layer.name, e); }
     });
   }
   // highlight selected (on top of full)
@@ -441,7 +442,8 @@ document.getElementById('imgReplace').addEventListener('change', e=>{
       const c=document.createElement('canvas');
       c.width=w; c.height=h;
       const g=c.getContext('2d');
-      g.clearRect(0,0,w,h);
+      g.fillStyle='#ffffff';
+      g.fillRect(0,0,w,h);
       const scale=Math.max(w/img.width, h/img.height);
       const nw=img.width*scale, nh=img.height*scale;
       const dx=(w-nw)/2, dy=(h-nh)/2;
