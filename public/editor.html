@@ -202,73 +202,39 @@ function render(){
   canvas.style.width = displayW+'px';
   canvas.style.height = displayH+'px';
   ctx.clearRect(0,0,w,h);
-  ctx.fillStyle = '#0b1220';
-  ctx.fillRect(0,0,w,h);
 
-  // 1) Draw the full composite (all original layers)
-  let drewFull = false;
-  if(psd.canvas && psd.canvas.width>0 && psd.canvas.height>0){
-    try{ ctx.drawImage(psd.canvas, 0, 0); drewFull = true; }catch(e){}
-  }
-  if(!drewFull && psd.imageData && psd.imageData.data){
-    try{
-      const tmp = document.createElement('canvas');
-      tmp.width = w; tmp.height = h;
-      tmp.getContext('2d').putImageData(psd.imageData, 0, 0);
-      ctx.drawImage(tmp, 0, 0); drewFull = true;
-    }catch(e){}
-  }
-  if(!drewFull){
-    const list = [...flatLayers].reverse();
-    let drewAny = false;
-    list.forEach(({layer})=>{
-      if(layer.hidden) return;
-      let src = layer.canvas;
-      if(!src && layer.imageData){
-        try{
-          const c = document.createElement('canvas');
-          c.width = layer.imageData.width || (layer.right-layer.left);
-          c.height = layer.imageData.height || (layer.bottom-layer.top);
-          c.getContext('2d').putImageData(layer.imageData, 0, 0);
-          src = c;
-        }catch{}
-      }
-      if(!src) return;
+  // Composite ALL layers bottom-to-top.
+  // For edited layers, use their replacement canvas. For others, use original.
+  // This ensures edits REPLACE the original layer, not overlay on top.
+  const list = [...flatLayers].reverse(); // bottom-to-top draw order
+  let drewAny = false;
+  list.forEach(({layer})=>{
+    if(layer.hidden) return;
+    let src = layer.canvas;
+    if(!src && layer.imageData){
       try{
-        const x = layer.left ?? 0, y = layer.top ?? 0;
-        ctx.globalAlpha = (layer.opacity ?? 255)/255;
-        ctx.drawImage(src, x, y);
-        ctx.globalAlpha = 1; drewAny = true;
+        const c = document.createElement('canvas');
+        c.width = layer.imageData.width || (layer.right-layer.left);
+        c.height = layer.imageData.height || (layer.bottom-layer.top);
+        c.getContext('2d').putImageData(layer.imageData, 0, 0);
+        src = c;
       }catch{}
-    });
-    if(!drewAny){
-      ctx.fillStyle = '#1f2937'; ctx.fillRect(0,0,w,h);
-      ctx.fillStyle = '#9ca3af'; ctx.font = '14px sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText('No raster layers — try Photopea', w/2, h/2);
     }
-  }
-
-  // 2) Overlay edited layers: stamp the replacement image directly on the composite
-  if(editedLayers.size > 0){
-    editedLayers.forEach(layer=>{
-      if(!layer.canvas) return;
-      try{
-        const x = layer.left ?? 0, y = layer.top ?? 0;
-        const lw = layer.right - layer.left, lh = layer.bottom - layer.top;
-        const opacity = layer.opacity ?? 255;
-        // Debug: verify canvas has content
-        try{
-          const px = layer.canvas.getContext('2d').getImageData(
-            Math.floor(layer.canvas.width/2), Math.floor(layer.canvas.height/2), 1, 1).data;
-          console.log('EDIT OVERLAY:', layer.name, 'canvas:', layer.canvas.width, 'x', layer.canvas.height,
-            'dest:', x, y, lw, lh, 'opacity:', opacity, 'center pixel:', px[0], px[1], px[2], px[3]);
-        }catch(e2){ console.warn('edit pixel check fail', e2); }
-        // Draw the replacement image at the layer's position
-        if(opacity < 255) ctx.globalAlpha = opacity/255;
-        ctx.drawImage(layer.canvas, x, y);
-        ctx.globalAlpha = 1;
-      }catch(e){ console.error('edited overlay fail', layer.name, e); }
-    });
+    if(!src) return; // groups have no canvas, skip
+    try{
+      const x = layer.left ?? 0, y = layer.top ?? 0;
+      const opacity = layer.opacity;
+      if(opacity !== undefined && opacity < 1) ctx.globalAlpha = opacity;
+      else ctx.globalAlpha = 1;
+      ctx.drawImage(src, x, y);
+      ctx.globalAlpha = 1;
+      drewAny = true;
+    }catch{}
+  });
+  if(!drewAny){
+    ctx.fillStyle = '#1f2937'; ctx.fillRect(0,0,w,h);
+    ctx.fillStyle = '#9ca3af'; ctx.font = '14px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('No raster layers — try Photopea', w/2, h/2);
   }
   // highlight selected (on top of full)
   if(selected && selected.layer && !selected.layer.children){
@@ -291,7 +257,7 @@ function render(){
       ctx.restore();
     }
   }
-  console.log(`render done: ${w}x${h}, drewFull=${drewFull}, layers=${flatLayers.length}, selected=${selected?.layer?.name}`);
+  console.log(`render done: ${w}x${h}, layers=${flatLayers.length}, edited=${editedLayers.size}, selected=${selected?.layer?.name}`);
 }
 
 function buildLayerList(){
