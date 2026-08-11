@@ -263,41 +263,36 @@ function render(){
       try{
         const lx = layer.left ?? 0, ly = layer.top ?? 0;
 
-        if(false && layer._originalCanvas && layer.text){
-          // TEXT edit: pixel replacement to erase old text, show new
+        if(layer._editBg){
+          // Text edit: sample bg from current canvas, create opaque text canvas
           const lw = (layer.right - layer.left) || layer.canvas.width;
           const lh = (layer.bottom - layer.top) || layer.canvas.height;
           try{
-            const origData = layer._originalCanvas.getContext('2d').getImageData(0, 0, layer._originalCanvas.width, layer._originalCanvas.height).data;
-            const newData = layer.canvas.getContext('2d').getImageData(0, 0, layer.canvas.width, layer.canvas.height).data;
-            const compData = ctx.getImageData(lx, ly, lw, lh);
-            const cd = compData.data;
-            for(let i = 0; i < cd.length && i < origData.length && i < newData.length; i += 4){
-              const oa = origData[i + 3] / 255;
-              const na = newData[i + 3] / 255;
-              if(oa > 0.01 && oa < 0.99){
-                const inv = 1 / (1 - oa);
-                const bgR = (cd[i] - origData[i] * oa) * inv;
-                const bgG = (cd[i+1] - origData[i+1] * oa) * inv;
-                const bgB = (cd[i+2] - origData[i+2] * oa) * inv;
-                cd[i]   = Math.min(255, Math.max(0, Math.round(bgR * (1-na) + newData[i]   * na)));
-                cd[i+1] = Math.min(255, Math.max(0, Math.round(bgG * (1-na) + newData[i+1] * na)));
-                cd[i+2] = Math.min(255, Math.max(0, Math.round(bgB * (1-na) + newData[i+2] * na)));
-              } else if(oa >= 0.99){
-                cd[i] = newData[i]; cd[i+1] = newData[i+1]; cd[i+2] = newData[i+2]; cd[i+3] = newData[i+3];
-              } else if(na > 0.01){
-                cd[i]   = Math.round(cd[i] * (1-na) + newData[i] * na);
-                cd[i+1] = Math.round(cd[i+1] * (1-na) + newData[i+1] * na);
-                cd[i+2] = Math.round(cd[i+2] * (1-na) + newData[i+2] * na);
-              }
+            // Sample average background from the render canvas at the text position
+            const compData = ctx.getImageData(lx, ly, lw, lh).data;
+            const origD = layer._originalCanvas ? layer._originalCanvas.getContext('2d').getImageData(0, 0, lw, lh).data : null;
+            let r=0, g=0, b=0, n=0;
+            for(let i = 0; i < compData.length; i += 4){
+              const isBg = !origD || origD[i+3] < 10;
+              if(isBg){ r += compData[i]; g += compData[i+1]; b += compData[i+2]; n++; }
             }
-            ctx.putImageData(compData, lx, ly);
+            const bgR = n > 0 ? Math.round(r/n) : 255;
+            const bgG = n > 0 ? Math.round(g/n) : 255;
+            const bgB = n > 0 ? Math.round(b/n) : 255;
+            // Create opaque canvas: bg color + new text
+            const tc = document.createElement('canvas');
+            tc.width = lw; tc.height = lh;
+            const tg = tc.getContext('2d');
+            tg.fillStyle = 'rgb('+bgR+','+bgG+','+bgB+')';
+            tg.fillRect(0, 0, lw, lh);
+            tg.drawImage(layer.canvas, 0, 0);
+            ctx.drawImage(tc, lx, ly);
           }catch(e2){
-            console.error('text pixel math fail, fallback', e2);
+            console.error('text bg overlay fail', e2);
             ctx.drawImage(layer.canvas, lx, ly);
           }
         } else {
-          // IMAGE replace: just draw on top of composite
+          // Image replace: just draw on top of composite
           ctx.drawImage(layer.canvas, lx, ly);
         }
       }catch(e){ console.error('edit overlay fail', layer.name, e); }
@@ -429,31 +424,13 @@ function applyText(){
     if(layer.text.text !== undefined) layer.text.text = newTxt;
     else if(layer.text.txt !== undefined) layer.text.txt = newTxt;
 
-    const lx = layer.left ?? 0, ly = layer.top ?? 0;
     const lw = (layer.right - layer.left) || 200;
     const lh = (layer.bottom - layer.top) || 50;
 
-    // Sample background color from composite where original text was transparent
-    let bgR = 255, bgG = 255, bgB = 255;
-    try{
-      if(psd.canvas){
-        const compData = psd.canvas.getContext('2d').getImageData(lx, ly, lw, lh).data;
-        const origD = layer.canvas ? layer.canvas.getContext('2d').getImageData(0, 0, lw, lh).data : null;
-        let r=0, g=0, b=0, n=0;
-        for(let i = 0; i < compData.length; i += 4){
-          const isBg = !origD || origD[i+3] < 10;
-          if(isBg){ r += compData[i]; g += compData[i+1]; b += compData[i+2]; n++; }
-        }
-        if(n > 0){ bgR = Math.round(r/n); bgG = Math.round(g/n); bgB = Math.round(b/n); }
-      }
-    }catch(e){ console.warn('bg sample fail', e); }
-
-    // Draw text on sampled background (fully opaque canvas)
+    // Create text canvas on transparent background (render will add bg)
     const c = document.createElement('canvas');
     c.width = lw; c.height = lh;
     const g = c.getContext('2d');
-    g.fillStyle = 'rgb('+bgR+','+bgG+','+bgB+')';
-    g.fillRect(0, 0, lw, lh);
     g.fillStyle = newColor;
     g.font = newSize + 'px Inter, sans-serif';
     g.textBaseline = 'top';
@@ -466,65 +443,13 @@ function applyText(){
     if(!layer.text.style) layer.text.style = {};
     layer.text.style.fontSize = newSize;
     layer.text.style.fillColor = hexToRgb(newColor);
+    layer._editBg = true; // flag: render needs to add background
     editedLayers.add(layer);
   }catch(e){ alert('Text update failed: ' + e.message); console.error(e); }
   buildLayerList();
   render();
 }
 
-document.getElementById('imgReplace').addEventListener('change', e=>{
-  const file=e.target.files[0];
-  if(!file || !selected){
-    alert('Select a layer first, then choose an image');
-    return;
-  }
-  const url=URL.createObjectURL(file);
-  const img=new Image();
-  img.onerror=()=>{
-    alert('Failed to load image — try another JPG/PNG');
-    URL.revokeObjectURL(url);
-  };
-  img.onload=()=>{
-    try{
-      const layer=selected.layer;
-      const w = layer.right - layer.left;
-      const h = layer.bottom - layer.top;
-      if(w<=0 || h<=0){
-        alert('Layer has no size — cannot replace');
-        URL.revokeObjectURL(url);
-        return;
-      }
-      const c=document.createElement('canvas');
-      c.width=w; c.height=h;
-      const g=c.getContext('2d');
-      g.fillStyle='#ffffff';
-      g.fillRect(0,0,w,h);
-      const scale=Math.max(w/img.width, h/img.height);
-      const nw=img.width*scale, nh=img.height*scale;
-      const dx=(w-nw)/2, dy=(h-nh)/2;
-      g.drawImage(img, dx, dy, nw, nh);
-      const testPixel = g.getImageData(Math.floor(w/2), Math.floor(h/2), 1, 1).data;
-      console.log(`New canvas for ${layer.name}: ${w}x${h}, scale ${scale.toFixed(2)}, center pixel RGBA(${testPixel[0]},${testPixel[1]},${testPixel[2]},${testPixel[3]})`);
-      // Save original canvas for pixel-math reblending in render
-      if(!layer._originalCanvas) layer._originalCanvas = layer.canvas;
-      layer.canvas=c;
-      if(layer.imageData) delete layer.imageData;
-      editedLayers.add(layer);
-      console.log(`Edited layer ${layer.name} added to editedLayers, total edited: ${editedLayers.size}`);
-      URL.revokeObjectURL(url);
-      buildLayerList();
-      render();
-      setTimeout(()=>{
-        console.log(`After render, main canvas ${canvas.width}x${canvas.height}, edited layers: ${editedLayers.size}`);
-      }, 100);
-    }catch(err){
-      alert('Replace failed: '+err.message);
-      console.error(err);
-      URL.revokeObjectURL(url);
-    }
-  };
-  img.src=url;
-});
 function clearImageReplace(){ document.getElementById('imgReplace').value=''; }
 
 function exportPNG(){
