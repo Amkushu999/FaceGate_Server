@@ -256,13 +256,53 @@ function render(){
     }
   }
 
-  // Overlay edited layers directly on top of the full composite
+  // Overlay edited layers on top of the full composite
   if(editedLayers.size > 0){
     editedLayers.forEach(layer=>{
       if(!layer.canvas) return;
       try{
         const lx = layer.left ?? 0, ly = layer.top ?? 0;
-        ctx.drawImage(layer.canvas, lx, ly);
+        const lw = (layer.right - layer.left) || layer.canvas.width;
+        const lh = (layer.bottom - layer.top) || layer.canvas.height;
+
+        if(layer._originalCanvas){
+          // Pixel replacement: remove old layer content, draw new layer content
+          // This works for text edits where we need to erase old text and show new
+          const origW = layer._originalCanvas.width, origH = layer._originalCanvas.height;
+          const origData = layer._originalCanvas.getContext('2d').getImageData(0, 0, origW, origH).data;
+          const newData = layer.canvas.getContext('2d').getImageData(0, 0, layer.canvas.width, layer.canvas.height).data;
+          const compData = ctx.getImageData(lx, ly, lw, lh);
+          const cd = compData.data;
+          for(let i = 0; i < cd.length; i += 4){
+            const idx = i < origData.length ? i : (origData.length - 4);
+            const oa = origData[idx + 3] / 255; // old alpha
+            const na = newData[i + 3] / 255;     // new alpha
+            if(oa > 0.01){
+              // Remove old content: recover background behind it
+              // composite = bg*(1-oa) + old*oa → bg = (composite - old*oa) / (1-oa)
+              const inv = 1 / (1 - oa);
+              const bgR = (cd[i]   - origData[idx]   * oa) * inv;
+              const bgG = (cd[i+1] - origData[idx+1] * oa) * inv;
+              const bgB = (cd[i+2] - origData[idx+2] * oa) * inv;
+              // Blend new content on recovered background
+              cd[i]   = Math.min(255, Math.max(0, Math.round(bgR * (1-na) + newData[i]   * na)));
+              cd[i+1] = Math.min(255, Math.max(0, Math.round(bgG * (1-na) + newData[i+1] * na)));
+              cd[i+2] = Math.min(255, Math.max(0, Math.round(bgB * (1-na) + newData[i+2] * na)));
+              cd[i+3] = 255;
+            } else if(na > 0.01){
+              // No old content here, just blend new on top of composite
+              cd[i]   = Math.round(cd[i]   * (1-na) + newData[i]   * na);
+              cd[i+1] = Math.round(cd[i+1] * (1-na) + newData[i+1] * na);
+              cd[i+2] = Math.round(cd[i+2] * (1-na) + newData[i+2] * na);
+              cd[i+3] = 255;
+            }
+            // else: no old or new content, keep composite pixel as-is
+          }
+          ctx.putImageData(compData, lx, ly);
+        } else {
+          // No original saved (image replace): just draw on top
+          ctx.drawImage(layer.canvas, lx, ly);
+        }
       }catch(e){ console.error('edit overlay fail', layer.name, e); }
     });
   }
@@ -398,17 +438,13 @@ function applyText(){
     const lw = (layer.right - layer.left) || 200;
     const lh = (layer.bottom - layer.top) || 50;
 
-    // Create canvas for the new text
+    // Create canvas for the new text (transparent background)
     const c = document.createElement('canvas');
     c.width = lw;
     c.height = lh;
     const g = c.getContext('2d');
 
-    // White background so text is visible (matches PSD card background)
-    g.fillStyle = '#ffffff';
-    g.fillRect(0, 0, lw, lh);
-
-    // Draw text
+    // Draw text (no background fill - we'll blend properly in render)
     g.fillStyle = newColor;
     g.font = newSize + 'px Inter, sans-serif';
     g.textBaseline = 'top';
