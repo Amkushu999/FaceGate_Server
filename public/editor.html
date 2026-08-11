@@ -7,7 +7,6 @@
 <title>PSD Editor — facedocs.bond</title>
 <meta name="description" content="Upload PSD, edit layers, export as PNG — FaceGate Editor"/>
 <script src="https://cdn.jsdelivr.net/npm/ag-psd@31.0.2/dist/bundle.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/psd@3.4.0/dist/psd.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{--bg:#080c14;--card:#111827;--border:#1f2937;--accent:#3b82f6;--text:#e5e7eb;--muted:#9ca3af}
@@ -47,16 +46,29 @@ a{color:#60a5fa;text-decoration:none}
 .prop-group label{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;display:block;margin-bottom:6px}
 .prop-row{display:flex;gap:8px}
 .hidden{display:none}
+/* Loading overlay */
+#loadingOverlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(8,12,20,.7);z-index:100;display:none;justify-content:center;align-items:center;flex-direction:column;gap:12px}
+#loadingOverlay.active{display:flex}
+.loader-spinner{width:40px;height:40px;border:3px solid var(--border);border-top-color:#3b82f6;border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#loadingText{color:var(--text);font-size:14px;font-weight:600}
 </style>
 </head>
 <body>
+
+<!-- Loading overlay -->
+<div id="loadingOverlay">
+  <div class="loader-spinner"></div>
+  <div id="loadingText">Loading PSD…</div>
+</div>
+
 <nav class="nav">
   <a href="/" style="font-weight:800;display:flex;align-items:center;gap:9px">
     <img src="/ic_launcher_round.webp" alt="FaceGate" style="width:28px;height:28px;border-radius:8px;object-fit:cover;border:1px solid #1f2937;display:block"/>
     FaceGate <span style="color:var(--muted);font-weight:500">Editor</span>
   </a>
   <div style="display:flex;gap:8px;align-items:center">
-    <button class="btn btn-sm" onclick="document.getElementById('psdFile').click()">📂 Upload PSD</button>
+    <button class="btn btn-sm" id="uploadBtn">📂 Upload PSD</button>
     <button class="btn btn-primary btn-sm" onclick="exportPNG()">⬇ Export PNG</button>
     <button class="btn btn-sm hidden" id="saveServerBtn" onclick="uploadPsdToServer()">☁ Save to VPS</button>
     <a class="btn btn-sm" href="/download">Download APK</a>
@@ -69,13 +81,13 @@ a{color:#60a5fa;text-decoration:none}
     <div class="panel-head"><span>Layers</span><span id="layerCount" class="kbd">0</span></div>
     <div class="panel-body">
       <div id="dropZone" class="drop" style="position:relative;overflow:hidden">
-        <input id="psdFile" type="file" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer" accept="*/*"/>
+        <input id="psdFile" type="file" style="position:absolute;top:0;left:0;right:0;bottom:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:0"/>
         <div style="font-size:22px">🎨</div>
         <div style="margin-top:6px;font-weight:600">Drop .psd here</div>
         <div style="font-size:11px;margin-top:2px">or click to browse — choose <b>Files</b></div>
         <div class="kbd" style="margin:8px auto 0;display:inline-block">.psd → edit → PNG</div>
-        <div style="font-size:10px;color:var(--muted);margin-top:6px;line-height:1.4">On phone: tap <b>Browse</b> / <b>Files</b> at the top<br>then go to Downloads/Documents to find your .psd<br><span style="color:#60a5fa">Now shows all files</span></div>
-        <div id="psdStatus" style="font-size:11px;color:#60a5fa;margin-top:8px;min-height:14px"></div>
+        <div style="font-size:10px;color:var(--muted);margin-top:6px;line-height:1.4">On phone: tap <b>Browse</b> / <b>Files</b> at the top<br>then go to Downloads/Documents to find your .psd</div>
+        <div id="psdStatus" style="font-size:12px;color:#60a5fa;margin-top:8px;min-height:16px;font-weight:600"></div>
       </div>
       <div style="margin-top:12px;padding:10px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px">
         <div style="font-size:11px;font-weight:600;color:var(--muted)">Direct VPS upload (if editor won't load):</div>
@@ -132,7 +144,7 @@ a{color:#60a5fa;text-decoration:none}
         <div class="prop-group">
           <label>Replace Image</label>
           <input id="imgReplace" type="file" accept="image/*" class="input"/>
-          <div style="font-size:11px;color:var(--muted);margin-top:6px">Upload a PNG/JPG to replace this layer’s pixels.</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:6px">Upload a PNG/JPG to replace this layer's pixels.</div>
         </div>
         <button class="btn" style="width:100%" onclick="clearImageReplace()">Clear</button>
       </div>
@@ -143,6 +155,22 @@ a{color:#60a5fa;text-decoration:none}
 </div>
 
 <script>
+/* ─── Helper: show status to user (visible, not just console) ─── */
+function showStatus(msg, color){
+  const el = document.getElementById('psdStatus');
+  if(el){ el.textContent = msg; el.style.color = color || '#60a5fa'; }
+}
+function showLoading(msg){
+  const ov = document.getElementById('loadingOverlay');
+  const txt = document.getElementById('loadingText');
+  if(ov) ov.classList.add('active');
+  if(txt) txt.textContent = msg || 'Loading…';
+}
+function hideLoading(){
+  const ov = document.getElementById('loadingOverlay');
+  if(ov) ov.classList.remove('active');
+}
+
 let psd = null;
 let currentPsdFile = null;
 let flatLayers = []; // {idx, layer, depth}
@@ -180,9 +208,7 @@ function render(){
   let drewFull = false;
   if(psd.canvas && psd.canvas.width>0 && psd.canvas.height>0){
     try{
-      // psd.canvas may be smaller than w/h if not full, draw at 0,0
       ctx.drawImage(psd.canvas, 0, 0);
-      // check if something was drawn by sampling center pixel alpha
       drewFull = true;
     }catch(e){ console.warn('full psd.canvas fail', e); }
   }
@@ -213,7 +239,6 @@ function render(){
         }catch(e){ console.warn('imageData to canvas fail', layer.name, e); }
       }
       if(!src){
-        // Try to use layer.imageData directly if no canvas
         skipped++;
         return;
       }
@@ -298,7 +323,6 @@ function buildLayerList(){
         c.width = 36; c.height = 36;
         const g=c.getContext('2d');
         g.fillStyle='#0b1220'; g.fillRect(0,0,36,36);
-        // scale to fit
         const scale = Math.min(36/(layer.canvas.width||36), 36/(layer.canvas.height||36));
         const w=(layer.canvas.width||36)*scale, h=(layer.canvas.height||36)*scale;
         g.drawImage(layer.canvas, (36-w)/2, (36-h)/2, w, h);
@@ -335,11 +359,9 @@ function selectLayer(idx){
   `;
   if(layer.text){
     const t = layer.text;
-    // ag-psd stores text differently per version — try common paths
     let txt = t.text || t.txt || '';
     if(typeof txt !== 'string' && t.paragraphs) txt = t.paragraphs.map(p=>p.text).join('\\n');
     document.getElementById('txtContent').value = txt;
-    // size / color from style
     let size = 24, color='#ffffff';
     try{
       if(t.style && t.style.fontSize) size = parseInt(t.style.fontSize);
@@ -373,11 +395,9 @@ function applyText(){
   const newSize = parseInt(document.getElementById('txtSize').value) || 24;
   const newColor = document.getElementById('txtColor').value;
   const layer = selected.layer;
-  // update ag-psd text object — try to keep structure
   try{
     if(layer.text.text !== undefined) layer.text.text = newTxt;
     else if(layer.text.txt !== undefined) layer.text.txt = newTxt;
-    // crude: recreate canvas for text layer by drawing new text
     const w = (layer.right - layer.left) || 400;
     const h = (layer.bottom - layer.top) || 100;
     const c = document.createElement('canvas');
@@ -386,18 +406,15 @@ function applyText(){
     g.fillStyle = newColor;
     g.font = newSize+'px Inter, sans-serif';
     g.textBaseline='top';
-    // simple word wrap
     const lines = newTxt.split('\\n');
     lines.forEach((ln,i)=> g.fillText(ln, 4, 4 + i*(newSize*1.2)));
     layer.canvas = c;
     if(layer.imageData) delete layer.imageData;
     layer.right = layer.left + w;
     layer.bottom = layer.top + h;
-    // store style for next edit
     if(!layer.text.style) layer.text.style={};
     layer.text.style.fontSize=newSize;
     layer.text.style.fillColor=hexToRgb(newColor);
-    // keep full composite and draw this edited layer on top (don't delete psd.canvas)
     editedLayers.add(layer);
   }catch(e){ alert('Text update failed: '+e.message); }
   buildLayerList();
@@ -426,29 +443,23 @@ document.getElementById('imgReplace').addEventListener('change', e=>{
         URL.revokeObjectURL(url);
         return;
       }
-      // Create new canvas for the layer at its original size
       const c=document.createElement('canvas');
       c.width=w; c.height=h;
       const g=c.getContext('2d');
       g.clearRect(0,0,w,h);
-      // Draw new image with cover to fill the layer bounds
       const scale=Math.max(w/img.width, h/img.height);
       const nw=img.width*scale, nh=img.height*scale;
       const dx=(w-nw)/2, dy=(h-nh)/2;
       g.drawImage(img, dx, dy, nw, nh);
-      // Verify the new canvas has content by checking a pixel
       const testPixel = g.getImageData(Math.floor(w/2), Math.floor(h/2), 1, 1).data;
       console.log(`New canvas for ${layer.name}: ${w}x${h}, scale ${scale.toFixed(2)}, center pixel RGBA(${testPixel[0]},${testPixel[1]},${testPixel[2]},${testPixel[3]})`);
       layer.canvas=c;
       if(layer.imageData) delete layer.imageData;
-      // Keep track for overlay
       editedLayers.add(layer);
       console.log(`Edited layer ${layer.name} added to editedLayers, total edited: ${editedLayers.size}`);
       URL.revokeObjectURL(url);
       buildLayerList();
-      // Force re-render - ensure full is drawn first, then edited on top
       render();
-      // Verify export will be full
       setTimeout(()=>{
         console.log(`After render, main canvas ${canvas.width}x${canvas.height}, edited layers: ${editedLayers.size}`);
       }, 100);
@@ -511,162 +522,82 @@ async function directUpload(e){
     status.textContent='❌ '+err.message;
   }
 }
+
+/* ─── Core: handleFile — robust PSD loading with FileReader fallback ─── */
 async function handleFile(file){
-  if(!file){
-    document.getElementById('psdStatus').textContent = 'No file selected — try again';
-    return;
-  }
-  const status = document.getElementById('psdStatus');
-  status.textContent = 'Selected: ' + file.name + ' (' + (file.size/1024).toFixed(1) + ' KB) — loading…';
-  status.style.color = '#60a5fa';
-  console.log('handleFile:', file.name, file.size, file.type);
-  currentPsdFile=file;
-  document.getElementById('saveServerBtn').classList.remove('hidden');
-  let buf;
-  try{
-    buf = await file.arrayBuffer();
-    console.log('arrayBuffer ok', buf.byteLength);
-    status.textContent = 'Parsing ' + file.name + '...';
-  }catch(e){
-    console.error('arrayBuffer fail', e);
-    status.textContent = '❌ Failed to read file: ' + e.message;
-    status.style.color = '#f87171';
-    alert('Failed to read file: '+e.message);
-    return;
-  }
-  // Try ag-psd first, then fallback to psd.js for files that ag-psd fails on (like Belarus_DL.psd)
-  let psdObj = null;
-  let lastError = null;
-  try{
-    const AgPsd = window.AgPsd || window.agPsd || window.ag_psd;
-    if(AgPsd && AgPsd.readPsd){
-      psdObj = AgPsd.readPsd(buf, {useImageData:true, useHelpLayer:true});
-    } else {
-      throw new Error('ag-psd not loaded');
+  try {
+    if(!file){
+      showStatus('No file selected — try again', '#f87171');
+      return;
     }
-  }catch(e){
-    console.warn('ag-psd failed, trying psd.js fallback', e);
-    lastError = e;
+    showStatus('📄 ' + file.name + ' (' + (file.size/1024).toFixed(1) + ' KB)', '#60a5fa');
+    showLoading('Reading ' + file.name + '…');
+    console.log('handleFile:', file.name, file.size, file.type);
+    currentPsdFile=file;
+    document.getElementById('saveServerBtn').classList.remove('hidden');
+
+    // ── Read file as ArrayBuffer (with FileReader fallback for mobile) ──
+    let buf;
     try{
-      if(window.PSD){
-        const psd2 = new window.PSD(new Uint8Array(buf));
-        await new Promise((resolve, reject)=>{
-          psd2.parse();
-          // psd.js parses async, wait a tick
-          setTimeout(()=>{
-            try{
-              // Build a compatible psd object from psd.js
-              const img = psd2.image;
-              const w = psd.header.width, h = psd.header.height;
-              // Create a canvas for the full composite from psd.image
-              const fullCanvas = document.createElement('canvas');
-              fullCanvas.width = w; fullCanvas.height = h;
-              const g = fullCanvas.getContext('2d');
-              // psd.image has pixel data
-              try{
-                const imageData = g.createImageData(w,h);
-                // psd.image is a Pixel API, need to get data
-                // Try different psd.js APIs
-                if(psd2.image && psd2.image.toPng){
-                  // Fallback: use imageData from psd
-                  console.log('psd.js fallback: using image data');
-                }
-              }catch{}
-              // Build psdObj compatible with our renderer
-              psdObj = {
-                width: w,
-                height: h,
-                children: [],
-                canvas: null,
-                imageData: null,
-                name: file.name
-              };
-              // Convert psd.js layers to our flat structure
-              function convert(agLayers, psdLayers){
-                // This is a simplified conversion — for now, just use the full image as a single layer fallback
-                // If ag-psd fails, we can at least show the full flattened image from psd.js
-                const fullCanvas2 = document.createElement('canvas');
-                fullCanvas2.width = w; fullCanvas2.height = h;
-                const ctx2 = fullCanvas2.getContext('2d');
-                // Try to get pixel data from psd.image
-                try{
-                  const data = psd2.image.data; // Uint8ClampedArray?
-                  if(data && data.length === w*h*4){
-                    const id = new ImageData(new Uint8ClampedArray(data), w, h);
-                    ctx2.putImageData(id, 0, 0);
-                    psdObj.canvas = fullCanvas2;
-                    psdObj.imageData = ctx2.getImageData(0,0,w,h);
-                  } else if(psd.image && psd.image.canvas){
-                    psdObj.canvas = psd.image.canvas();
-                  }
-                }catch(e2){ console.warn('psd.js canvas fail', e2); }
-                // Also add a placeholder layer for photo big so editing still works
-                // Find the photo big layer in psd2.layers
-                const photoLayer = psd2.layers.find(l=> l.name && l.name.toLowerCase().includes('photo big'));
-                if(photoLayer){
-                  // Create a mock layer for photo big that we can edit
-                  const left = photoLayer.left || 121;
-                  const top = photoLayer.top || 253;
-                  const right = left + (photoLayer.width || 264);
-                  const bottom = top + (photoLayer.height || 291);
-                  psdObj.children = [{
-                    name: photoLayer.name,
-                    left: left, top: top, right: right, bottom: bottom,
-                    width: photoLayer.width || 264,
-                    height: photoLayer.height || 291,
-                    canvas: null, // will be filled when edited
-                    hidden: false,
-                    opacity: 255
-                  }];
-                  // Add other layers as placeholders for display
-                  psd2.layers.forEach(l=>{
-                    if(l.name !== photoLayer.name && !l.name.includes('</Layer')){
-                      psdObj.children.push({
-                        name: l.name,
-                        left: l.left || 0, top: l.top || 0,
-                        right: (l.left||0)+(l.width||0), bottom: (l.top||0)+(l.height||0),
-                        canvas: null, hidden: false
-                      });
-                    }
-                  });
-                }
-              }
-              // Try to actually use psd2's image if available
-              if(psd2.image){
-                try{
-                  const c = document.createElement('canvas');
-                  c.width = w; c.height = h;
-                  const ctx3 = c.getContext('2d');
-                  // psd.js image has toPng or pixel data
-                  // For now, just fill with the image data if we can get it
-                  psdObj.canvas = c;
-                }catch{}
-              }
-              // If we still don't have a psd object, throw
-              if(!psdObj.canvas && !psdObj.children.length) throw new Error('psd.js fallback incomplete');
-            }catch(e2){
-              console.error('psd.js fallback failed', e2);
-              throw lastError;
-            }
-            resolve();
-          }, 100);
-        });
-        // After the above, psdObj should be set
-        if(!psdObj || (!psdObj.canvas && !psdObj.children)) throw lastError;
-      } else {
-        throw new Error('psd.js not loaded');
+      if(typeof file.arrayBuffer === 'function'){
+        buf = await file.arrayBuffer();
       }
+      // If arrayBuffer returned 0 bytes or failed, try FileReader
+      if(!buf || buf.byteLength === 0){
+        console.log('arrayBuffer empty/missing, trying FileReader');
+        buf = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () => reject(new Error('FileReader failed: ' + (reader.error?.message || 'unknown')));
+          reader.readAsArrayBuffer(file);
+        });
+      }
+    }catch(e){
+      console.warn('arrayBuffer() failed, trying FileReader', e);
+      buf = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error('FileReader failed: ' + (reader.error?.message || 'unknown')));
+        reader.readAsArrayBuffer(file);
+      });
     }
-  }
-  try{
-    if(!psdObj) throw lastError || new Error('No PSD parsed');
-    // If psdObj came from ag-psd fallback, it may already have children/canvas
-    // If it came from psd.js, it may have been built above
+
+    if(!buf || buf.byteLength === 0){
+      throw new Error('File is empty (0 bytes) — may not have been read correctly. Try a different file or browser.');
+    }
+
+    console.log('File read OK:', buf.byteLength, 'bytes');
+    showLoading('Parsing PSD (' + (buf.byteLength/1024).toFixed(0) + ' KB)…');
+
+    // ── Parse PSD with ag-psd ──
+    let psdObj = null;
+    const AgPsd = window.AgPsd || window.agPsd || window.ag_psd;
+
+    if(!AgPsd || !AgPsd.readPsd){
+      throw new Error('ag-psd library not loaded. Check your internet connection and reload the page.');
+    }
+
+    try{
+      psdObj = AgPsd.readPsd(buf, {useImageData: true, useHelpLayer: true});
+      console.log('ag-psd parse OK:', psdObj?.width, 'x', psdObj?.height, 'children:', psdObj?.children?.length);
+    }catch(e){
+      console.error('ag-psd parse failed:', e);
+      throw new Error('PSD parse error: ' + e.message + '\n\nThis PSD may use features not supported by ag-psd. Try a simpler file or use Photopea.');
+    }
+
+    if(!psdObj){
+      throw new Error('PSD parser returned nothing — file may be corrupt or unsupported.');
+    }
+    if(!psdObj.width || !psdObj.height){
+      throw new Error('PSD has no dimensions (0×0). File may be corrupt or empty.');
+    }
+
+    // ── Set up PSD for rendering ──
     psd = psdObj;
     psd.name = file.name;
-    // If psd was from psd.js fallback and has no children, try to at least show the full canvas
+
+    // If no children from parser, create a single background layer from the canvas
     if(!psd.children || psd.children.length===0){
-      // Create a single full layer from the canvas
       if(psd.canvas){
         psd.children = [{
           name: 'Background',
@@ -675,8 +606,12 @@ async function handleFile(file){
           hidden: false,
           opacity: 255
         }];
+      } else {
+        // No layers and no canvas — still show dimensions
+        psd.children = [];
       }
     }
+
     flatLayers = flatten(psd.children || []);
     document.getElementById('canvasCard').style.display='block';
     document.getElementById('canvasLabel').classList.remove('hidden');
@@ -685,17 +620,56 @@ async function handleFile(file){
     render();
     const first = flatLayers.findIndex(f=>!f.layer.children);
     if(first>=0) selectLayer(first);
+
+    showStatus('✅ ' + file.name + ' — ' + flatLayers.length + ' layers, ' + psd.width + '×' + psd.height, '#34d399');
+    hideLoading();
+    console.log('PSD loaded successfully:', psd.width, 'x', psd.height, flatLayers.length, 'layers');
+
   }catch(e){
-    console.error(e);
-    alert('Failed to parse PSD: '+e.message+'\nTry another file or use Photopea for complex PSDs.');
+    console.error('handleFile error:', e);
+    hideLoading();
+    showStatus('❌ ' + e.message, '#f87171');
+    alert('Failed to load PSD:\n\n' + e.message);
   }
 }
 
-document.getElementById('psdFile').addEventListener('change', e=> handleFile(e.target.files[0]));
+/* ─── File input wiring: reset value on click, listen to both change & input ─── */
+const psdFileInput = document.getElementById('psdFile');
+
+// Reset value on click so change event fires even for same file
+psdFileInput.addEventListener('click', function(){
+  this.value = '';
+});
+
+// Primary: 'change' event
+psdFileInput.addEventListener('change', function(e){
+  const file = e.target.files && e.target.files[0];
+  console.log('psdFile change event, files:', e.target.files?.length, file?.name);
+  if(file) handleFile(file);
+  else showStatus('No file selected', '#f87171');
+});
+
+// Fallback: 'input' event (some mobile browsers fire this instead)
+psdFileInput.addEventListener('input', function(e){
+  const file = e.target.files && e.target.files[0];
+  console.log('psdFile input event, files:', e.target.files?.length, file?.name);
+  if(file) handleFile(file);
+});
+
+// Upload button in nav — also reset input value
+document.getElementById('uploadBtn').addEventListener('click', function(){
+  psdFileInput.value = '';
+  psdFileInput.click();
+});
+
+// Drag & drop
 const dz=document.getElementById('dropZone');
 dz.addEventListener('dragover', e=>{ e.preventDefault(); dz.classList.add('dragover'); });
 dz.addEventListener('dragleave', ()=> dz.classList.remove('dragover'));
 dz.addEventListener('drop', e=>{ e.preventDefault(); dz.classList.remove('dragover'); const f=e.dataTransfer.files[0]; if(f) handleFile(f); });
+
+// Log that the page is ready and ag-psd is available
+console.log('Editor ready. ag-psd available:', !!(window.AgPsd || window.agPsd || window.ag_psd));
 </script>
 </body>
 </html>
