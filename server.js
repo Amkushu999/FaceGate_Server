@@ -23,6 +23,8 @@ const PORT = process.env.PORT || 3000;
 const ADMIN_USER = process.env.ADMIN_USER || 'admin';
 const ADMIN_PASS = process.env.ADMIN_PASS || '87877878@Kk##';
 const UPLOAD_TOKEN = process.env.UPLOAD_TOKEN || process.env.UPLOAD_SECRET || 'facegate_upload_2024_87877878_4f9a1c';
+// Shared secret used by the FaceGate Telegram bot to create/delete 1-hour trial keys.
+const BOT_TRIAL_SECRET = process.env.BOT_TRIAL_SECRET || 'facegate_bot_trial_2024_87877878';
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
 try { if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true }); } catch {}
 const PSD_DIR = path.join(UPLOAD_DIR, 'psd');
@@ -646,6 +648,47 @@ app.post('/upload', requireUploadToken, upload.any(), (req,res)=>{
   if(files.length===0) return res.status(400).json({error:'No file'});
   const out = files.map(f=>({ filename:path.basename(f.path), original:f.originalname, size:fs.statSync(f.path).size, url:`https://${req.get('host')}/files/${encodeURIComponent(path.basename(f.path))}`}));
   res.json({ok:true, uploaded:out});
+});
+
+// ── Telegram bot — 1-hour FREE TRIAL key management ──────────────────────────
+// The FaceGate bot requests a per-user trial key (prefixed with the user's
+// telegram username, no @) valid for 1 hour, and deletes it after 1h.
+function requireBotTrialSecret(req,res,next){
+  const s = req.headers['x-bot-secret'] || req.body?.secret || req.query?.secret;
+  if(s && s === BOT_TRIAL_SECRET) return next();
+  return res.status(401).json({ ok:false, error:'Unauthorized' });
+}
+
+// POST /api/bot/trial  body: { key }  -> creates a trial key (1h, single device)
+app.post('/api/bot/trial', requireBotTrialSecret, (req,res)=>{
+  try{
+    const { key } = req.body||{};
+    if(!key) return res.status(400).json({ ok:false, error:'key required' });
+    const rec = db.createKey({
+      key,
+      max_devices: 1,
+      is_trial: true,
+      is_paid: false,
+      days: 0,
+      note: 'bot 1h trial'
+    });
+    res.json({ ok:true, key: rec.key, expires_in_seconds: 3600 });
+  }catch(e){
+    res.status(400).json({ ok:false, error: e.message });
+  }
+});
+
+// DELETE /api/bot/trial/:key  -> delete a trial key after 1h
+app.delete('/api/bot/trial/:key', requireBotTrialSecret, (req,res)=>{
+  try{
+    const key = decodeURIComponent(req.params.key);
+    const rec = db.findKey(key);
+    if(!rec) return res.status(404).json({ ok:false, error:'key not found' });
+    db.deleteKey(rec.id);
+    res.json({ ok:true, deleted: key });
+  }catch(e){
+    res.status(400).json({ ok:false, error: e.message });
+  }
 });
 
 // ── PSD upload — save .psd/.psb to VPS in uploads/psd (for editor) ──
