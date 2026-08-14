@@ -212,6 +212,69 @@ function listActivations() {
   return load().activations;
 }
 
+// List trial keys with their activation status (who activated, time remaining).
+// Returned for the bot admin panel. remaining_ms = time left until trial ends.
+function listTrialActivations() {
+  const db = load();
+  const now = Date.now();
+  const out = [];
+  for (const k of db.keys) {
+    if (!k.is_trial) continue;
+    // find the activation(s) for this key
+    const acts = db.activations.filter(a => a.keyText === k.key);
+    for (const a of acts) {
+      let remaining_ms = null;
+      if (a.expiresAt) remaining_ms = Math.max(0, new Date(a.expiresAt).getTime() - now);
+      out.push({
+        key: k.key,
+        deviceId: a.deviceId || "",
+        wifiIp: a.wifiIp || "",
+        androidId: a.androidId || "",
+        activated_at: k.activated_at || a.createdAt || null,
+        expiresAt: a.expiresAt || null,
+        remaining_ms: remaining_ms,
+        created_at: k.created_at || null
+      });
+    }
+  }
+  // sort by most recently activated first
+  out.sort((a,b)=> (new Date(b.activated_at||0)).getTime() - (new Date(a.activated_at||0)).getTime());
+  return out;
+}
+
+// Reset a trial key so the user can re-use it for another 1 hour:
+// clears the activation + activated_at, so it behaves like a fresh (unused) trial.
+function resetTrial(keyText) {
+  const db = load();
+  const k = db.keys.find(x => x.key === keyText);
+  if (!k) return false;
+  k.activated_at = null;
+  db.activations = db.activations.filter(a => a.keyText !== keyText);
+  save();
+  return true;
+}
+
+// Get device/activation detail for a given trial key.
+function getTrialActivation(keyText) {
+  const db = load();
+  const k = db.keys.find(x => x.key === keyText);
+  if (!k) return null;
+  const a = db.activations.find(x => x.keyText === keyText);
+  const now = Date.now();
+  let remaining_ms = null;
+  if (a && a.expiresAt) remaining_ms = Math.max(0, new Date(a.expiresAt).getTime() - now);
+  return {
+    key: keyText,
+    deviceId: a?.deviceId || "",
+    wifiIp: a?.wifiIp || "",
+    androidId: a?.androidId || "",
+    activated_at: k.activated_at || null,
+    expiresAt: a?.expiresAt || null,
+    remaining_ms: remaining_ms,
+    is_activated: !!k.activated_at
+  };
+}
+
 function stats() {
   const db = load();
   return {
@@ -227,5 +290,6 @@ module.exports = {
   findKey, findKeyById, listKeys, createKey, updateKey, deleteKey,
   getActivationsForKey, countActiveDevices, findActivation, findActivationByToken, findActivationByDevice,
   upsertActivation, touchActivation, removeExpired, revokeDevice,
-  generateToken, listActivations, stats, markKeyActivated
+  generateToken, listActivations, listTrialActivations, resetTrial, getTrialActivation,
+  stats, markKeyActivated
 };

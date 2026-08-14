@@ -695,6 +695,46 @@ app.delete('/api/bot/trial/:key', requireBotTrialSecret, (req,res)=>{
   }
 });
 
+// ── Bot admin — trial activations management ────────────────────────────────
+// GET /api/bot/admin/trials?page=&per_page=  -> paginated list of trial activations
+app.get('/api/bot/admin/trials', requireBotTrialSecret, (req,res)=>{
+  try{
+    const per_page = parseInt(req.query.per_page) || 10;
+    const page = parseInt(req.query.page) || 1;
+    const all = db.listTrialActivations();
+    const total = all.length;
+    const start = (page-1)*per_page;
+    const items = all.slice(start, start+per_page);
+    res.json({ ok:true, total, page, per_page, total_pages: Math.ceil(total/per_page)||1, items });
+  }catch(e){
+    res.status(400).json({ ok:false, error:e.message });
+  }
+});
+
+// POST /api/bot/admin/trial/reset  body:{key} -> reset a trial so user can re-use (another 1h)
+app.post('/api/bot/admin/trial/reset', requireBotTrialSecret, (req,res)=>{
+  try{
+    const { key } = req.body||{};
+    if(!key) return res.status(400).json({ ok:false, error:'key required' });
+    const ok = db.resetTrial(key);
+    res.json({ ok, key });
+  }catch(e){
+    res.status(400).json({ ok:false, error:e.message });
+  }
+});
+
+// GET /api/bot/admin/trial/:key -> detail for one trial key
+app.get('/api/bot/admin/trial/:key', requireBotTrialSecret, (req,res)=>{
+  try{
+    const key = decodeURIComponent(req.params.key);
+    const info = db.getTrialActivation(key);
+    if(!info) return res.status(404).json({ ok:false, error:'key not found' });
+    res.json({ ok:true, ...info });
+  }catch(e){
+    res.status(400).json({ ok:false, error:e.message });
+  }
+});
+
 // ── PSD upload — save .psd/.psb to VPS in uploads/psd (for editor) ──
 const psdStorage = multer.diskStorage({
   destination: (req,file,cb)=> cb(null, PSD_DIR),
