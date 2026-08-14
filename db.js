@@ -222,6 +222,20 @@ function listTrialActivations() {
     if (!k.is_trial) continue;
     // find the activation(s) for this key
     const acts = db.activations.filter(a => a.keyText === k.key);
+    if (acts.length === 0) {
+      // issued but not yet activated in the app
+      out.push({
+        key: k.key,
+        deviceId: "",
+        wifiIp: "",
+        androidId: "",
+        activated_at: k.activated_at || null,
+        expiresAt: null,
+        remaining_ms: null,
+        created_at: k.created_at || null
+      });
+      continue;
+    }
     for (const a of acts) {
       let remaining_ms = null;
       if (a.expiresAt) remaining_ms = Math.max(0, new Date(a.expiresAt).getTime() - now);
@@ -237,8 +251,8 @@ function listTrialActivations() {
       });
     }
   }
-  // sort by most recently activated first
-  out.sort((a,b)=> (new Date(b.activated_at||0)).getTime() - (new Date(a.activated_at||0)).getTime());
+  // sort by most recently created/activated first
+  out.sort((a,b)=> (new Date(b.activated_at||b.created_at||0)).getTime() - (new Date(a.activated_at||a.created_at||0)).getTime());
   return out;
 }
 
