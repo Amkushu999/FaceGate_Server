@@ -151,6 +151,10 @@ app.post('/api/validate_key', (req, res) => {
     expiresAt
   });
 
+  // For trial keys, the 1-hour countdown starts NOW (on first activation), not
+  // when the key was created. removeExpired() deletes the trial key 1h later.
+  if (rec.is_trial) db.markKeyActivated(rec.key);
+
   return res.json({
     success: true,
     message: rec.is_trial ? "Trial activated (1h)" : "Key activated",

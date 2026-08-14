@@ -164,6 +164,34 @@ function removeExpired() {
     return new Date(a.expiresAt).getTime() > now;
   });
   if (db.activations.length !== before) save();
+  // Delete 1-hour trial keys exactly 1 hour after they were FIRST ACTIVATED
+  // (not from creation). This closes the loophole where a user could re-activate
+  // the same trial key repeatedly for free.
+  const keysBefore = db.keys.length;
+  const oneHour = 60 * 60 * 1000;
+  db.keys = db.keys.filter(k => {
+    if (!k.is_trial) return true;          // only trial keys
+    if (!k.activated_at) return true;       // never activated -> keep (unused)
+    return now - new Date(k.activated_at).getTime() < oneHour;
+  });
+  if (db.keys.length !== keysBefore) {
+    save();
+    // also drop any activations tied to deleted trial keys
+    const keySet = new Set(db.keys.map(k => k.key));
+    db.activations = db.activations.filter(a => keySet.has(a.keyText));
+    save();
+  }
+}
+
+// Mark a trial key as activated (called on first successful activation).
+function markKeyActivated(keyText) {
+  const db = load();
+  const k = db.findKey(keyText);
+  if (k && !k.activated_at) {
+    k.activated_at = new Date().toISOString();
+    save();
+  }
+  return k;
 }
 function revokeDevice(deviceId, keyText) {
   const db = load();
@@ -199,5 +227,5 @@ module.exports = {
   findKey, findKeyById, listKeys, createKey, updateKey, deleteKey,
   getActivationsForKey, countActiveDevices, findActivation, findActivationByToken, findActivationByDevice,
   upsertActivation, touchActivation, removeExpired, revokeDevice,
-  generateToken, listActivations, stats
+  generateToken, listActivations, stats, markKeyActivated
 };
