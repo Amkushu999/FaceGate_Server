@@ -185,8 +185,8 @@ function removeExpired() {
 
 // Mark a trial key as activated (called on first successful activation).
 function markKeyActivated(keyText) {
-  const db = load();
-  const k = db.findKey(keyText);
+  const data = load();
+  const k = data.keys.find(x => x.key === keyText);
   if (k && !k.activated_at) {
     k.activated_at = new Date().toISOString();
     save();
