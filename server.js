@@ -914,6 +914,9 @@ app.get('/api/swishy/state', (req,res)=>{
 app.post('/api/swishy/toggle', (req,res)=>{
   const allowed = (()=>{
     if(req.headers['x-upload-token'] && req.headers['x-upload-token']===UPLOAD_TOKEN) return true;
+    // The FaceGate Telegram bot authenticates with x-bot-secret (BOT_TRIAL_SECRET),
+    // so it can flip the swishy toggle via /swishyon /swishyoff.
+    if(req.headers['x-bot-secret'] && req.headers['x-bot-secret']===BOT_TRIAL_SECRET) return true;
     const auth = req.headers.authorization;
     if(auth){
       try{
