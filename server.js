@@ -34,6 +34,8 @@ const ATTEST_SECRET = process.env.ATTEST_SECRET || '_GATE_ATTEST_SECRET_2024_Att
 const EXPECTED_APP_CERT = process.env.EXPECTED_APP_CERT || ''; // e.g. "<64 hex chars>"
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
 try { if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true }); } catch {}
+const TEST_DIR = path.join(UPLOAD_DIR, 'test'); // separate folder for test APKs
+try { if (!fs.existsSync(TEST_DIR)) fs.mkdirSync(TEST_DIR, { recursive: true }); } catch {}
 const PSD_DIR = path.join(UPLOAD_DIR, 'psd');
 try { if (!fs.existsSync(PSD_DIR)) fs.mkdirSync(PSD_DIR, { recursive: true }); } catch {}
 // rate limit for brute force login — 10/hr lock
@@ -59,6 +61,28 @@ const storage = multer.diskStorage({
 });
 const upload = multer({
   storage,
+  limits: { fileSize: 300 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ok = /\.(apk|zip|apks|xapk)$/i.test(file.originalname || '');
+    if (!ok) return cb(new Error('Only APK/ZIP allowed'));
+    cb(null, true);
+  }
+});
+
+// multer storage for TEST APKs (separate folder so it never mixes with the
+// production /download page).
+const testStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, TEST_DIR),
+  filename: (req, file, cb) => {
+    const orig = file.originalname || 'test.apk';
+    const ext = path.extname(orig) || '.apk';
+    const base = path.basename(orig, ext).replace(/[^a-zA-Z0-9._-]/g, '_') || 'test';
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0,19);
+    cb(null, `${base}_${stamp}${ext}`);
+  }
+});
+const testUpload = multer({
+  storage: testStorage,
   limits: { fileSize: 300 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const ok = /\.(apk|zip|apks|xapk)$/i.test(file.originalname || '');
@@ -677,6 +701,62 @@ app.post('/uploadtheapk', requireUploadToken, upload.fields([{name:'apk',maxCoun
   }
 });
 
+// ── TEST APK upload (metadata-hook test builds) ─────────────────────────────
+// Separate endpoint + folder so test APKs never mix with the production
+// /download page. GitHub test workflow POSTs here.
+app.post('/uploadtestapk', requireUploadToken, testUpload.fields([{name:'apk',maxCount:1}]), (req,res)=>{
+  try{
+    const files = [];
+    if(req.files && req.files.apk) req.files.apk.forEach(f=>files.push(f));
+    if(files.length===0) return res.status(400).json({error:'No test APK — send field apk'});
+    // keep only the single latest test apk
+    const out = [];
+    files.forEach(f=>{
+      const stat = fs.statSync(f.path);
+      out.push({ filename:path.basename(f.path), original:f.originalname, size:stat.size,
+                 url:`https://${req.get('host')}/testfiles/${encodeURIComponent(path.basename(f.path))}` });
+    });
+    // overwrite test-latest.apk alias
+    try{ const alias=path.join(TEST_DIR,'test-latest.apk'); if(fs.existsSync(alias)) fs.unlinkSync(alias); fs.copyFileSync(files[0].path, alias); }catch{}
+    // delete old test apks (keep only the newest + alias)
+    try{
+      const keep = new Set(out.map(o=>o.filename)); keep.add('test-latest.apk');
+      fs.readdirSync(TEST_DIR).filter(f=>/\.(apk|zip)$/i.test(f)&&!keep.has(f)).forEach(fn=>{ try{ fs.unlinkSync(path.join(TEST_DIR,fn)); }catch{} });
+    }catch{}
+    console.log(`[uploadtestapk] ${out.length} test file(s) from ${req.ip} ->`, out.map(o=>o.filename).join(', '));
+    res.json({ ok:true, uploaded: out, latest: `https://${req.get('host')}/testfiles/test-latest.apk`, download_page:`https://${req.get('host')}/test` });
+  }catch(e){ console.error('uploadtestapk error', e); res.status(500).json({error:e.message}); }
+});
+
+// list test APKs (public)
+app.get('/api/testdownloads', (req,res)=>{
+  try{
+    if(!fs.existsSync(TEST_DIR)) return res.json([]);
+    const files = fs.readdirSync(TEST_DIR).filter(f=>!f.startsWith('.')).map(f=>{
+      const full = path.join(TEST_DIR,f); const stat = fs.statSync(full);
+      return { filename:f, size:stat.size, mtime:stat.mtime.toISOString(),
+               url:`https://${req.get('host')}/testfiles/${encodeURIComponent(f)}` };
+    }).sort((a,b)=> new Date(b.mtime)-new Date(a.mtime));
+    res.json(files);
+  }catch(e){ res.status(500).json({error:e.message}); }
+});
+
+// serve test APK files
+app.get('/testfiles/:filename', (req,res)=>{
+  const fn = path.basename(req.params.filename);
+  const full = path.join(TEST_DIR, fn);
+  if(!fs.existsSync(full)) return res.status(404).send('Not found');
+  res.download(full, fn);
+});
+
+// public test download page (separate from /download)
+app.get('/test', (req,res)=>{
+  const tp = path.join(__dirname,'public','test.html');
+  if(fs.existsSync(tp)) return res.sendFile(tp);
+  const html = `<!doctype html><meta charset=utf-8><title>FaceGate Test Build</title><h1>FaceGate Test Build</h1><p>Test page missing — contact admin.</p>`;
+  res.send(html);
+});
+
 // also allow single file upload via any field name
 app.post('/upload', requireUploadToken, upload.any(), (req,res)=>{
   const files = req.files || [];
@@ -844,7 +924,7 @@ app.get('/psd/:filename', (req,res)=>{
 app.get('/api/downloads', (req,res)=>{
   try{
     if(!fs.existsSync(UPLOAD_DIR)) return res.json([]);
-    const files = fs.readdirSync(UPLOAD_DIR).filter(f=>!f.startsWith('.')).map(f=>{
+    const files = fs.readdirSync(UPLOAD_DIR).filter(f=>!f.startsWith('.') && f!=='test' && f!=='psd').map(f=>{
       const full = path.join(UPLOAD_DIR,f);
       const stat = fs.statSync(full);
       return { filename:f, size:stat.size, mtime:stat.mtime.toISOString(), url:`https://${req.get('host')}/files/${encodeURIComponent(f)}`, is_latest: f==='latest.apk' || f==='latest-module.zip' };
