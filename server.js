@@ -115,6 +115,18 @@ app.get('/health', (req, res) => res.json({ ok: true, domain: 'facedocs.bond' })
 //   GET  /api/key_status/:key
 // ─────────────────────────────────────────────
 
+// Anti-tamper attestation endpoint — the app calls this at startup (no key
+// needed). Returns ok=true only if the signing-cert hash + HMAC are valid.
+app.post('/api/attest', (req, res) => {
+  const { device_id, deviceId, cert_hash, attest } = req.body || {};
+  const device = device_id || deviceId;
+  const att = verifyAttestation({ device, cert_hash, attest });
+  if(!att.ok){
+    return res.json({ ok:false, valid:false, reason: att.reason });
+  }
+  return res.json({ ok:true, valid:true, reason: att.reason });
+});
+
 app.post('/api/validate_key', (req, res) => {
   db.removeExpired();
   const { key, device_id, deviceId, wifi_ip, wifiIp, app_version } = req.body || {};
