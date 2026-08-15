@@ -323,7 +323,7 @@ async function checkHealth(){
   try{
     const r=await fetch('/api/health');
     const j=await r.json();
-    if(j.ok){ el.textContent='API Online • '+ (j.stats? j.stats.activeKeys+' keys ' : ''); dot.style.background='#22c55e'; dot.style.boxShadow='0 0 0 4px rgba(34,197,94,.15)'; }
+    if(j.ok){ el.textContent=''; dot.style.background='#22c55e'; dot.style.boxShadow='0 0 0 4px rgba(34,197,94,.15)'; }
     else { el.textContent='API Error'; dot.style.background='#ef4444'; }
   }catch{
     el.textContent='Offline'; dot.style.background='#ef4444';
