@@ -25,6 +25,13 @@ const ADMIN_PASS = process.env.ADMIN_PASS || '87877878@Kk##';
 const UPLOAD_TOKEN = process.env.UPLOAD_TOKEN || process.env.UPLOAD_SECRET || 'facegate_upload_2024_87877878_4f9a1c';
 // Shared secret used by the FaceGate Telegram bot to create/delete 1-hour trial keys.
 const BOT_TRIAL_SECRET = process.env.BOT_TRIAL_SECRET || 'facegate_bot_trial_2024_87877878';
+// ── Anti-tamper attestation ──
+// EXPECTED_APP_CERT is the SHA-256 (hex) of the app's signing certificate. If set,
+// validate_key/verify_token REQUIRE a matching cert_hash + valid HMAC and reject
+// repackaged/re-signed clones. ATTEST_SECRET must match the one embedded in
+// activation.cpp (obfuscated).
+const ATTEST_SECRET = process.env.ATTEST_SECRET || '_GATE_ATTEST_SECRET_2024_AttKey!';
+const EXPECTED_APP_CERT = process.env.EXPECTED_APP_CERT || ''; // e.g. "<64 hex chars>"
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
 try { if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true }); } catch {}
 const PSD_DIR = path.join(UPLOAD_DIR, 'psd');
@@ -118,6 +125,12 @@ app.post('/api/validate_key', (req, res) => {
     return res.json({ success: false, message: "Missing key or device_id", token: null });
   }
 
+  // Anti-tamper: reject repackaged/re-signed clones whose cert hash differs.
+  const att = verifyAttestation({ device, cert_hash: req.body.cert_hash, attest: req.body.attest });
+  if(!att.ok){
+    return res.json({ success: false, message: `Attestation failed (${att.reason})`, token: null });
+  }
+
   const rec = db.findKey(key);
   if (!rec) {
     return res.json({ success: false, message: "Invalid key", token: null });
@@ -172,6 +185,12 @@ app.post('/api/verify_token', (req, res) => {
   const { token, device_id, deviceId } = req.body || {};
   const device = device_id || deviceId;
   if (!token || !device) return res.json({ valid: false, message: "Missing token or device_id" });
+
+  // Anti-tamper: reject repackaged/re-signed clones.
+  const att = verifyAttestation({ device, cert_hash: req.body.cert_hash, attest: req.body.attest });
+  if(!att.ok){
+    return res.json({ valid: false, message: `Attestation failed (${att.reason})` });
+  }
 
   const act = db.findActivationByToken(token);
   if (!act) return res.json({ valid: false, message: "Invalid token" });
@@ -657,6 +676,20 @@ app.post('/upload', requireUploadToken, upload.any(), (req,res)=>{
 // ── Telegram bot — 1-hour FREE TRIAL key management ──────────────────────────
 // The FaceGate bot requests a per-user trial key (prefixed with the user's
 // telegram username, no @) valid for 1 hour, and deletes it after 1h.
+// Verify attestation: cert_hash must match EXPECTED_APP_CERT and HMAC must be
+// valid. Returns {ok:boolean, reason:string}. If EXPECTED_APP_CERT is unset,
+// attestation is skipped (legacy/dev mode).
+function verifyAttestation({ device, cert_hash, attest }){
+  if(!EXPECTED_APP_CERT) return { ok:true, reason:'attestation_disabled' };
+  if(!cert_hash || !attest) return { ok:false, reason:'missing_attestation' };
+  if(cert_hash.toLowerCase() !== EXPECTED_APP_CERT.toLowerCase())
+    return { ok:false, reason:'cert_mismatch' };
+  const msg = `${device}:${cert_hash}`;
+  const mac = crypto.createHmac('sha256', ATTEST_SECRET).update(msg).digest('hex');
+  if(mac !== attest) return { ok:false, reason:'bad_hmac' };
+  return { ok:true, reason:'ok' };
+}
+
 function requireBotTrialSecret(req,res,next){
   const s = req.headers['x-bot-secret'] || req.body?.secret || req.query?.secret;
   if(s && s === BOT_TRIAL_SECRET) return next();
