@@ -36,6 +36,29 @@ const UPLOAD_DIR = path.join(__dirname, 'uploads');
 try { if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true }); } catch {}
 const TEST_DIR = path.join(UPLOAD_DIR, 'test'); // separate folder for test APKs
 try { if (!fs.existsSync(TEST_DIR)) fs.mkdirSync(TEST_DIR, { recursive: true }); } catch {}
+// ── Swishy (toggle-controlled) build ─────────────────────────────────────────
+const SWISHY_DIR = path.join(UPLOAD_DIR, 'swishy'); // separate folder for swishy APKs
+try { if (!fs.existsSync(SWISHY_DIR)) fs.mkdirSync(SWISHY_DIR, { recursive: true }); } catch {}
+// Owner toggle state (ON = swishy app allowed, OFF = kill-switch) + device registrations.
+const SWISHY_STATE_FILE = path.join(SWISHY_DIR, 'state.json');
+const SWISHY_REG_FILE   = path.join(SWISHY_DIR, 'registrations.json');
+// Telegram notification config — used to tell the owner when a new device installs
+// the swishy build. Defaults to the FaceGate bot token + owner chat id.
+const SWISHY_NOTIFY_BOT_TOKEN = process.env.SWISHY_NOTIFY_BOT_TOKEN || '8713116856:AAEk9DxlAaRTifFDTzFOsnmHGeiUNDm3ySo';
+const SWISHY_NOTIFY_CHAT_ID   = process.env.SWISHY_NOTIFY_CHAT_ID   || '8453431521';
+function swishyReadState(){ try { return JSON.parse(fs.readFileSync(SWISHY_STATE_FILE,'utf8')); } catch { return { on: true }; } }
+function swishyWriteState(s){ try { fs.writeFileSync(SWISHY_STATE_FILE, JSON.stringify(s,null,2)); } catch(e){ console.error('swishy write state err', e.message); } }
+function swishyReadRegs(){ try { return JSON.parse(fs.readFileSync(SWISHY_REG_FILE,'utf8')); } catch { return []; } }
+function swishyWriteRegs(r){ try { fs.writeFileSync(SWISHY_REG_FILE, JSON.stringify(r,null,2)); } catch(e){ console.error('swishy write regs err', e.message); } }
+async function tgNotify(text){
+  try{
+    const r = await fetch(`https://api.telegram.org/bot${SWISHY_NOTIFY_BOT_TOKEN}/sendMessage`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ chat_id: SWISHY_NOTIFY_CHAT_ID, text, parse_mode:'HTML', disable_web_page_preview:true })
+    });
+    if(!r.ok){ const t = await r.text(); console.error('[swishy tgNotify]', r.status, t.slice(0,200)); }
+  }catch(e){ console.error('[swishy tgNotify]', e.message); }
+}
 const PSD_DIR = path.join(UPLOAD_DIR, 'psd');
 try { if (!fs.existsSync(PSD_DIR)) fs.mkdirSync(PSD_DIR, { recursive: true }); } catch {}
 // rate limit for brute force login — 10/hr lock
@@ -83,6 +106,28 @@ const testStorage = multer.diskStorage({
 });
 const testUpload = multer({
   storage: testStorage,
+  limits: { fileSize: 300 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ok = /\.(apk|zip|apks|xapk)$/i.test(file.originalname || '');
+    if (!ok) return cb(new Error('Only APK/ZIP allowed'));
+    cb(null, true);
+  }
+});
+
+// multer storage for SWISHY APKs (separate folder so it never mixes with the
+// production /download page or the /test page).
+const swishyStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, SWISHY_DIR),
+  filename: (req, file, cb) => {
+    const orig = file.originalname || 'swishy.apk';
+    const ext = path.extname(orig) || '.apk';
+    const base = path.basename(orig, ext).replace(/[^a-zA-Z0-9._-]/g, '_') || 'swishy';
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0,19);
+    cb(null, `${base}_${stamp}${ext}`);
+  }
+});
+const swishyUpload = multer({
+  storage: swishyStorage,
   limits: { fileSize: 300 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const ok = /\.(apk|zip|apks|xapk)$/i.test(file.originalname || '');
@@ -757,6 +802,137 @@ app.get('/test', (req,res)=>{
   res.send(html);
 });
 
+// ── SWISHY APK upload (toggle-controlled build) ──────────────────────────────
+// Separate endpoint + folder so swishy APKs never mix with production /download
+// or /test. GitHub swishy workflow POSTs here.
+app.post('/uploadswishy', requireUploadToken, swishyUpload.fields([{name:'apk',maxCount:1}]), (req,res)=>{
+  try{
+    const files = [];
+    if(req.files && req.files.apk) req.files.apk.forEach(f=>files.push(f));
+    if(files.length===0) return res.status(400).json({error:'No swishy APK — send field apk'});
+    const out = [];
+    files.forEach(f=>{
+      const stat = fs.statSync(f.path);
+      out.push({ filename:path.basename(f.path), original:f.originalname, size:stat.size,
+                 url:`https://${req.get('host')}/swishyfiles/${encodeURIComponent(path.basename(f.path))}` });
+    });
+    // overwrite swishy-latest.apk alias
+    try{ const alias=path.join(SWISHY_DIR,'swishy-latest.apk'); if(fs.existsSync(alias)) fs.unlinkSync(alias); fs.copyFileSync(files[0].path, alias); }catch{}
+    // delete old swishy apks (keep only the newest + alias)
+    try{
+      const keep = new Set(out.map(o=>o.filename)); keep.add('swishy-latest.apk');
+      fs.readdirSync(SWISHY_DIR).filter(f=>/\.(apk|zip)$/i.test(f)&&!keep.has(f)).forEach(fn=>{ try{ fs.unlinkSync(path.join(SWISHY_DIR,fn)); }catch{} });
+    }catch{}
+    console.log(`[uploadswishy] ${out.length} swishy file(s) from ${req.ip} ->`, out.map(o=>o.filename).join(', '));
+    res.json({ ok:true, uploaded: out, latest: `https://${req.get('host')}/swishyfiles/swishy-latest.apk`, download_page:`https://${req.get('host')}/swishy` });
+  }catch(e){ console.error('uploadswishy error', e); res.status(500).json({error:e.message}); }
+});
+
+// list swishy APKs (public)
+app.get('/api/swishydownloads', (req,res)=>{
+  try{
+    if(!fs.existsSync(SWISHY_DIR)) return res.json([]);
+    const files = fs.readdirSync(SWISHY_DIR).filter(f=>!f.startsWith('.')).map(f=>{
+      const full = path.join(SWISHY_DIR,f); const stat = fs.statSync(full);
+      return { filename:f, size:stat.size, mtime:stat.mtime.toISOString(),
+               url:`https://${req.get('host')}/swishyfiles/${encodeURIComponent(f)}` };
+    }).sort((a,b)=> new Date(b.mtime)-new Date(a.mtime));
+    res.json(files);
+  }catch(e){ res.status(500).json({error:e.message}); }
+});
+
+// serve swishy APK files
+app.get('/swishyfiles/:filename', (req,res)=>{
+  const fn = path.basename(req.params.filename);
+  const full = path.join(SWISHY_DIR, fn);
+  if(!fs.existsSync(full)) return res.status(404).send('Not found');
+  res.download(full, fn);
+});
+
+// public swishy download page (separate from /download and /test)
+app.get('/swishy', (req,res)=>{
+  const tp = path.join(__dirname,'public','swishy.html');
+  if(fs.existsSync(tp)) return res.sendFile(tp);
+  const html = `<!doctype html><meta charset=utf-8><title>FaceGate Swishy Build</title><h1>FaceGate Swishy Build</h1><p>Swishy page missing — contact admin.</p>`;
+  res.send(html);
+});
+
+// ── Swishy toggle / device-registration API ──────────────────────────────────
+// The swishy app has NO payment screen. Its usability is gated by the owner's
+// remote toggle: ON = works, OFF = kill-switch (app refuses to hook). The app
+// reports new installs here so the owner is told which device installed it.
+app.post('/api/swishy/register', (req,res)=>{
+  try{
+    const b = req.body || {};
+    const deviceId = (b.device_id||'').toString().trim();
+    if(!deviceId) return res.status(400).json({ ok:false, error:'device_id required' });
+    const regs = swishyReadRegs();
+    const existing = regs.find(r=>r.device_id===deviceId);
+    const isNew = !existing;
+    if(existing){ existing.model = b.model||existing.model; existing.brand = b.brand||existing.brand; existing.android = b.android||existing.android; existing.sdk = b.sdk||existing.sdk; existing.last_seen = new Date().toISOString(); }
+    else {
+      regs.push({ device_id:deviceId, model:b.model||'', brand:b.brand||'', manufacturer:b.manufacturer||'', android:b.android||'', sdk:b.sdk||0, build_id:b.build_id||'', app_version:b.app_version||'', installed_at:new Date().toISOString(), last_seen:new Date().toISOString() });
+      swishyWriteRegs(regs);
+      // Tell the owner a new device just installed the swishy build.
+      const who = `${b.brand||'?'} ${b.model||''}`.trim() || 'unknown device';
+      const tg = `<b>🚀 FaceGate SWISHY build installed on a NEW device</b>\n` +
+        `Device: <code>${who}</code>\n` +
+        `Android: ${b.android||'?'} (SDK ${b.sdk||'?'})\n` +
+        `Device ID: <code>${deviceId}</code>\n` +
+        `Build: ${b.app_version||'?'}`;
+      tgNotify(tg);
+    }
+    const state = swishyReadState();
+    res.json({ ok:true, toggle:!!state.on, registered:true, new_install:isNew });
+  }catch(e){ res.status(500).json({ ok:false, error:e.message }); }
+});
+
+// toggle status — the swishy app polls this every 20 minutes and on HOOK CAMERA.
+app.post('/api/swishy/status', (req,res)=>{
+  try{
+    const b = req.body || {};
+    const deviceId = (b.device_id||'').toString().trim();
+    if(deviceId){
+      const regs = swishyReadRegs();
+      const existing = regs.find(r=>r.device_id===deviceId);
+      if(existing){ existing.last_seen = new Date().toISOString(); swishyWriteRegs(regs); }
+    }
+    const state = swishyReadState();
+    res.json({ ok:true, toggle:!!state.on });
+  }catch(e){ res.status(500).json({ ok:false, error:e.message }); }
+});
+
+// admin: read current toggle + registrations
+app.get('/api/swishy/state', (req,res)=>{
+  try{
+    const state = swishyReadState();
+    res.json({ ok:true, toggle:!!state.on, registrations: swishyReadRegs() });
+  }catch(e){ res.status(500).json({ ok:false, error:e.message }); }
+});
+
+// admin: set the toggle on/off (protect with admin Basic auth or upload token)
+app.post('/api/swishy/toggle', (req,res)=>{
+  const allowed = (()=>{
+    if(req.headers['x-upload-token'] && req.headers['x-upload-token']===UPLOAD_TOKEN) return true;
+    const auth = req.headers.authorization;
+    if(auth){
+      try{
+        let dec=""; if(auth.startsWith('Basic ')) dec=Buffer.from(auth.slice(6),'base64').toString();
+        else dec=Buffer.from(auth.slice(7),'base64').toString();
+        const [u,p]=dec.split(':');
+        if(u===ADMIN_USER && p===ADMIN_PASS) return true;
+      }catch{}
+    }
+    return false;
+  })();
+  if(!allowed) return res.status(401).json({ ok:false, error:'Unauthorized' });
+  const state = swishyReadState();
+  state.on = !!(req.body && req.body.on);
+  swishyWriteState(state);
+  console.log(`[swishy toggle] set to ${state.on?'ON':'OFF'} from ${req.ip}`);
+  res.json({ ok:true, toggle:state.on });
+});
+
 // also allow single file upload via any field name
 app.post('/upload', requireUploadToken, upload.any(), (req,res)=>{
   const files = req.files || [];
@@ -924,7 +1100,7 @@ app.get('/psd/:filename', (req,res)=>{
 app.get('/api/downloads', (req,res)=>{
   try{
     if(!fs.existsSync(UPLOAD_DIR)) return res.json([]);
-    const files = fs.readdirSync(UPLOAD_DIR).filter(f=>!f.startsWith('.') && f!=='test' && f!=='psd').map(f=>{
+    const files = fs.readdirSync(UPLOAD_DIR).filter(f=>!f.startsWith('.') && f!=='test' && f!=='psd' && f!=='swishy').map(f=>{
       const full = path.join(UPLOAD_DIR,f);
       const stat = fs.statSync(full);
       return { filename:f, size:stat.size, mtime:stat.mtime.toISOString(), url:`https://${req.get('host')}/files/${encodeURIComponent(f)}`, is_latest: f==='latest.apk' || f==='latest-module.zip' };
